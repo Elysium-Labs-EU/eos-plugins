@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -98,22 +99,17 @@ func run(ctx context.Context, in io.Reader) error {
 		}
 	})
 
-	srv := &http.Server{Addr: address, Handler: mux}
+	ln, err := net.Listen("tcp", address)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", address, err)
+	}
 
-	errCh := make(chan error, 1)
+	srv := &http.Server{Handler: mux}
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errCh <- err
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			fmt.Fprintf(os.Stderr, "eos-sink-sse: server: %v\n", err)
 		}
 	}()
-
-	// Brief pause to let the server bind before printing READY.
-	// A real implementation would use net.Listen + signal on successful bind.
-	select {
-	case err := <-errCh:
-		return fmt.Errorf("server: %w", err)
-	default:
-	}
 
 	fmt.Println("READY")
 	fmt.Printf("eos-sink-sse: ready — serving SSE on %s/stream\n", address)
