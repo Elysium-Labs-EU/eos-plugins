@@ -1,0 +1,3 @@
+bin/
+eos-sink-*
+!eos-sink-*/
