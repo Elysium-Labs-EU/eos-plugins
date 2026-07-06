@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "eos-sink-*/v*"
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: "Plugin name (e.g., eos-sink-loki)"
+        required: true
+      version:
+        description: "Version tag (e.g., v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: codeberg-small
+    outputs:
+      plugin: ${{ steps.parse.outputs.plugin }}
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "plugin=${{ github.event.inputs.plugin }}" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            PLUGIN="${TAG%/*}"
+            VERSION="${TAG##*/}"
+            echo "plugin=${PLUGIN}" >> $GITHUB_OUTPUT
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          fi
+
+  lint:
+    needs: prepare
+    runs-on: codeberg-small
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ${{ needs.prepare.outputs.plugin }}
+
+  test:
+    needs: prepare
+    runs-on: codeberg-small
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
+      - name: Run tests
+        working-directory: ${{ needs.prepare.outputs.plugin }}
+        run: go test ./... -v -race
+
+  build:
+    needs: [prepare, lint, test]
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    runs-on: codeberg-medium
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
+      - name: Build binary
+        working-directory: ${{ needs.prepare.outputs.plugin }}
+        run: |
+          PLUGIN="${{ needs.prepare.outputs.plugin }}"
+          ARTIFACT="${PLUGIN}-linux-${{ matrix.goarch }}"
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -ldflags="-s -w" -o "../${ARTIFACT}" .
+      - name: Verify binary
+        run: |
+          ARTIFACT="${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}"
+          ls -lh "${ARTIFACT}"
+          file "${ARTIFACT}"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}
+          path: ${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: [prepare, build]
+    runs-on: codeberg-small
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+      - name: Prepare release files
+        run: |
+          PLUGIN="${{ needs.prepare.outputs.plugin }}"
+          mkdir -p release
+          find artifacts -type f -name "${PLUGIN}-linux-*" -exec cp {} release/ \;
+          ls -lh release/
+      - name: Generate checksums
+        run: |
+          cd release
+          PLUGIN="${{ needs.prepare.outputs.plugin }}"
+          sha256sum ${PLUGIN}-linux-* > sha256sums.txt
+          cat sha256sums.txt
+      - name: Determine if prerelease
+        id: prerelease
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          if [[ "$VERSION" =~ -[a-zA-Z] ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          fi
+      - name: Create release and upload assets
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+        run: |
+          PLUGIN="${{ needs.prepare.outputs.plugin }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          IS_PRERELEASE="${{ steps.prerelease.outputs.is_prerelease }}"
+          REPO="${{ github.repository }}"
+          TAG="${PLUGIN}/${VERSION}"
+
+          BODY=$(cat <<EOF
+          ## ${PLUGIN} ${VERSION}
+
+          eos log sink plugin — ships logs from eos-managed services to external destinations.
+
+          ### Quick Installation
+
+          \`\`\`bash
+          curl -sSL https://codeberg.org/${REPO}/raw/branch/main/install.sh | sudo bash -s -- ${PLUGIN}
+          \`\`\`
+
+          ### Manual Installation
+
+          Download the binary for your architecture:
+          - **Linux AMD64**: \`${PLUGIN}-linux-amd64\`
+          - **Linux ARM64**: \`${PLUGIN}-linux-arm64\`
+
+          \`\`\`bash
+          chmod +x ${PLUGIN}-linux-amd64
+          sudo cp ${PLUGIN}-linux-amd64 /usr/local/bin/${PLUGIN}
+          \`\`\`
+
+          ### Verify Download
+
+          \`\`\`bash
+          sha256sum -c sha256sums.txt
+          \`\`\`
+
+          See the [README](https://codeberg.org/${REPO}/src/branch/main/${PLUGIN}/README.md) for configuration.
+          EOF
+          )
+
+          RELEASE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://codeberg.org/api/v1/repos/${REPO}/releases" \
+            -H "Authorization: token ${GITEA_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg tag "${TAG}" \
+              --arg name "${PLUGIN} ${VERSION}" \
+              --arg body "${BODY}" \
+              --argjson prerelease "${IS_PRERELEASE}" \
+              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: $prerelease}'
+            )")
+          RELEASE_HTTP_CODE=$(echo "${RELEASE_RESPONSE}" | tail -n1)
+          RELEASE_BODY=$(echo "${RELEASE_RESPONSE}" | sed '$d')
+          RELEASE_ID=$(echo "${RELEASE_BODY}" | jq -r '.id')
+
+          if [ "${RELEASE_HTTP_CODE}" != "201" ] || [ -z "${RELEASE_ID}" ] || [ "${RELEASE_ID}" = "null" ]; then
+            echo "Failed to create release. HTTP: ${RELEASE_HTTP_CODE}, Response: ${RELEASE_BODY}"
+            exit 1
+          fi
+
+          echo "Created release ID: ${RELEASE_ID}"
+
+          for file in release/${PLUGIN}-linux-amd64 release/${PLUGIN}-linux-arm64 release/sha256sums.txt; do
+            filename=$(basename "$file")
+            echo "Uploading ${filename}..."
+            UPLOAD_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+              "https://codeberg.org/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${filename}" \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -F "attachment=@${file}")
+            UPLOAD_HTTP_CODE=$(echo "${UPLOAD_RESPONSE}" | tail -n1)
+            if [ "${UPLOAD_HTTP_CODE}" != "201" ]; then
+              echo "Failed to upload ${filename}. HTTP: ${UPLOAD_HTTP_CODE}"
+              exit 1
+            fi
+            echo "Uploaded ${filename} (HTTP ${UPLOAD_HTTP_CODE})"
+          done

@@ -1,4 +1,4 @@
-.PHONY: help list build install build-linux install-orb
+.PHONY: help list build install build-linux install-orb release
 
 BINARY_NAME=eos-sink-sse
 GOBIN=./bin
@@ -29,3 +29,9 @@ build-linux: ## Cross-compile for Linux (amd64)
 install-orb: build-linux ## Install into OrbStack $(ORB_MACHINE) at /usr/local/bin
 	orb run -m $(ORB_MACHINE) bash -lc "sudo cp $(PWD)/bin/$(BINARY_NAME)-linux /usr/local/bin/$(BINARY_NAME)"
 	@echo "Installed $(BINARY_NAME) in OrbStack $(ORB_MACHINE)"
+
+release: ## Tag and push release (usage: make release TAG=v0.1.0)
+	@test -n "$(TAG)" || (echo "usage: make release TAG=v0.1.0" && exit 1)
+	git tag $(BINARY_NAME)/$(TAG)
+	git push origin $(BINARY_NAME)/$(TAG)
+	@echo "Released $(BINARY_NAME)/$(TAG) — CI will build and publish"
