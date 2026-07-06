@@ -48,17 +48,16 @@ func run(ctx context.Context, in io.Reader) error {
 		return fmt.Errorf("missing required option project_id")
 	}
 
-	endpoint, _ := options["endpoint"].(string)
-	if endpoint == "" {
-		endpoint = "http://localhost:1447"
+	address := strings.TrimRight(os.Getenv("EOS_SINK_ADDRESS"), "/")
+	if address == "" {
+		return fmt.Errorf("missing required EOS_SINK_ADDRESS")
 	}
-	endpoint = strings.TrimRight(endpoint, "/")
 
-	url := fmt.Sprintf("%s/api/projects/%s/logs/ingest", endpoint, projectID)
+	url := fmt.Sprintf("%s/api/projects/%s/logs/ingest", address, projectID)
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	fmt.Println("READY")
-	fmt.Printf("eos-sink-logbench: ready — endpoint=%s project=%s\n", endpoint, projectID)
+	fmt.Printf("eos-sink-logbench: ready — endpoint=%s project=%s\n", address, projectID)
 
 	firstSuccess := false
 	sc := bufio.NewScanner(in)

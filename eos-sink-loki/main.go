@@ -42,12 +42,11 @@ func main() {
 	stop()
 }
 
-func run(ctx context.Context, in io.Reader) error { //nolint:unparam // consistent with logbench plugin signature; future error paths may use it
-	address := os.Getenv("EOS_SINK_ADDRESS")
+func run(ctx context.Context, in io.Reader) error {
+	address := strings.TrimRight(os.Getenv("EOS_SINK_ADDRESS"), "/")
 	if address == "" {
-		address = "http://localhost:3100"
+		return fmt.Errorf("missing required EOS_SINK_ADDRESS")
 	}
-	address = strings.TrimRight(address, "/")
 	service := os.Getenv("EOS_SINK_SERVICE")
 
 	url := address + "/loki/api/v1/push"
