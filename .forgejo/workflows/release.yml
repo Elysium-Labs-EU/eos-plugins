@@ -145,7 +145,7 @@ jobs:
           BODY=$(cat <<EOF
           ## ${PLUGIN} ${VERSION}
 
-          eos log sink plugin — ships logs from eos-managed services to external destinations.
+          eos log sink plugin; ships logs from eos-managed services to external destinations.
 
           ### Quick Installation
 

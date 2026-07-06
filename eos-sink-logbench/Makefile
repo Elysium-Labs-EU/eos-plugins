@@ -34,4 +34,4 @@ release: ## Tag and push release (usage: make release TAG=v0.1.0)
 	@test -n "$(TAG)" || (echo "usage: make release TAG=v0.1.0" && exit 1)
 	git tag $(BINARY_NAME)/$(TAG)
 	git push origin $(BINARY_NAME)/$(TAG)
-	@echo "Released $(BINARY_NAME)/$(TAG) — CI will build and publish"
+	@echo "Released $(BINARY_NAME)/$(TAG); CI will build and publish"

@@ -208,7 +208,7 @@ main() {
     fi
     actual=$(sha256sum "$tmp_binary" | awk '{print $1}')
     if [ "$expected" != "$actual" ]; then
-        error "Checksum mismatch — binary may be corrupted"
+        error "Checksum mismatch; binary may be corrupted"
         dim "  expected: $expected"
         dim "  got:      $actual"
         rm -f "$tmp_binary" "$tmp_checksums"
