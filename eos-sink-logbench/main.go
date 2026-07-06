@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -26,6 +27,7 @@ type ingestBody struct {
 }
 
 func main() {
+	runtime.GOMAXPROCS(1)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	if err := run(ctx, os.Stdin); err != nil {
 		stop()

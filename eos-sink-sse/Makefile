@@ -1,9 +1,15 @@
-.PHONY: build install build-linux install-orb
+.PHONY: help list build install build-linux install-orb
 
 BINARY_NAME=eos-sink-sse
 GOBIN=./bin
 INSTALL_PATH=~/.local/bin
 ORB_MACHINE ?= debian
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}' | sort
+
+list: help ## List all available commands
 
 build: ## Build binary
 	@mkdir -p $(GOBIN)

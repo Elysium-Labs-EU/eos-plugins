@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 )
@@ -47,6 +48,7 @@ func (b *broker) publish(msg string) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(1)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	if err := run(ctx, os.Stdin); err != nil {
 		stop()
@@ -76,6 +78,7 @@ func run(ctx context.Context, in io.Reader) error {
 			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 			return
 		}
+		flusher.Flush()
 
 		ch := b.subscribe()
 		defer b.unsubscribe(ch)
