@@ -2,69 +2,77 @@
 
 [![Codeberg](https://img.shields.io/badge/Codeberg-eos--plugins-blue?logo=codeberg)](https://codeberg.org/Elysium_Labs/eos-plugins)
 
-Log sink plugins for [eos](https://codeberg.org/Elysium_Labs/eos).
+Log sink plugins for [eos](https://codeberg.org/Elysium_Labs/eos). Each plugin is a standalone binary that eos spawns as a subprocess, pipes JSON log records to via stdin, and restarts if it crashes.
 
-Each plugin is a standalone binary. eos pipes JSON log records to the plugin's stdin; the plugin prints `READY` once it's accepting input, then forwards every line to its destination.
-
-## Plugins
-
-| Plugin | Forwards to | Default address |
-|--------|-------------|-----------------|
-| `eos-sink-loki` | Grafana Loki | `http://localhost:3100` |
-| `eos-sink-sse` | Server-Sent Events (HTTP) | `:9000` |
-| `eos-sink-logbench` | [Logbench](https://logbench.dev) | `http://localhost:1447` |
+Three plugins are available: `eos-sink-loki` forwards logs to Grafana Loki, `eos-sink-sse` broadcasts them as Server-Sent Events over HTTP, and `eos-sink-logbench` ships them to [Logbench](https://logbench.dev).
 
 ## Install
 
-Each plugin builds independently. From the plugin directory:
+**One-line install** (Linux, requires root):
 
 ```bash
-# Build and install to ~/.local/bin
-make install
-
-# Cross-compile for Linux amd64
-make build-linux
+curl -sSL https://codeberg.org/Elysium_Labs/eos-plugins/raw/branch/main/install.sh | sudo bash -s -- eos-sink-loki
 ```
 
-Or from source:
+Replace `eos-sink-loki` with whichever plugin you need. The script detects your architecture, downloads the pre-built binary from the latest release, verifies the SHA256 checksum, and installs to `/usr/local/bin`.
+
+To pin a specific version, set `EOS_PLUGIN_VERSION=v0.1.0` before running.
+
+**From source:**
 
 ```bash
 cd eos-sink-loki
-CGO_ENABLED=0 go build -o eos-sink-loki .
+make install   # builds and installs to ~/.local/bin
 ```
 
 ## Configuration
 
+Sinks are declared in `service.yaml` under `log_sinks`. eos passes `address` to the plugin via `EOS_SINK_ADDRESS` and `options` via `EOS_SINK_OPTIONS`.
+
+`mode` is either `push` (plugin connects outward to a remote) or `serve` (plugin binds a local port).
+
+```yaml
+log_sinks:
+  - type: loki
+    mode: push
+    address: "http://your-loki-host:3100"
+
+  - type: sse
+    mode: serve
+    address: ":9000"
+
+  - type: logbench
+    mode: push
+    address: "http://your-logbench-host:1447"
+    options:
+      project_id: "your-project-id"
+```
+
 ### eos-sink-loki
 
-Pushes each log line to Loki's `/loki/api/v1/push` endpoint. Maps `stderr` → `level=error`, `stdout` → `level=info`.
+Pushes each log line to Loki's `/loki/api/v1/push` endpoint. Maps `stderr` stream to `level=error`, `stdout` to `level=info`. The `service` label is set from `EOS_SINK_SERVICE`, which eos populates automatically from the service name.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `EOS_SINK_ADDRESS` | `http://localhost:3100` | Loki base URL |
-| `EOS_SINK_SERVICE` | _(empty)_ | Value for the `service` label on every log entry |
+`EOS_SINK_ADDRESS` is required. Example: `http://loki:3100`.
 
 ### eos-sink-sse
 
-Starts an HTTP server and broadcasts each log line as a Server-Sent Event. Connect to `/stream` to receive the feed. Useful for live log tailing in a browser or dashboard.
+Starts an HTTP server and broadcasts each log line as a Server-Sent Event on `/stream`. Useful for live log tailing in a browser or custom dashboard.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `EOS_SINK_ADDRESS` | `:9000` | Bind address for the SSE server |
+`EOS_SINK_ADDRESS` is required. Example: `:9000`. Connect with:
+
+```bash
+curl -N http://your-host:9000/stream
+```
 
 ### eos-sink-logbench
 
-Posts each log line to Logbench's ingest API. Requires a project ID.
+Posts each log line to Logbench's ingest API. Requires a project ID in `options`.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `EOS_SINK_OPTIONS` | yes | JSON: `{"project_id": "your-id", "endpoint": "http://localhost:1447"}` |
-
-`endpoint` defaults to `http://localhost:1447` if omitted from the JSON.
+`EOS_SINK_ADDRESS` is required. Example: `http://logbench:1447`. `project_id` must be set in `options`.
 
 ## Log record format
 
-eos emits newline-delimited JSON:
+eos emits newline-delimited JSON to the plugin's stdin:
 
 ```json
 {"ts": "2026-07-06T10:00:00.000000000Z", "stream": "stdout", "msg": "server started on :8080"}
