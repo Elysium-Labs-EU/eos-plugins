@@ -52,7 +52,7 @@ func run(ctx context.Context, in io.Reader) error { //nolint:unparam // consiste
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	fmt.Println("READY")
-	fmt.Fprintf(os.Stderr, "eos-sink-loki: ready — endpoint=%s service=%s\n", url, service)
+	fmt.Printf("eos-sink-loki: ready — endpoint=%s service=%s\n", url, service)
 
 	sc := bufio.NewScanner(in)
 	for sc.Scan() {

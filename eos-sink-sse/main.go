@@ -113,7 +113,7 @@ func run(ctx context.Context, in io.Reader) error {
 	}
 
 	fmt.Println("READY")
-	fmt.Fprintf(os.Stderr, "eos-sink-sse: ready — serving SSE on %s/stream\n", address)
+	fmt.Printf("eos-sink-sse: ready — serving SSE on %s/stream\n", address)
 
 	sc := bufio.NewScanner(in)
 	for sc.Scan() {

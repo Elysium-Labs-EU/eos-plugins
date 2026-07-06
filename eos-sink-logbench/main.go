@@ -56,7 +56,7 @@ func run(ctx context.Context, in io.Reader) error {
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	fmt.Println("READY")
-	fmt.Fprintf(os.Stderr, "eos-sink-logbench: ready — endpoint=%s project=%s\n", endpoint, projectID)
+	fmt.Printf("eos-sink-logbench: ready — endpoint=%s project=%s\n", endpoint, projectID)
 
 	firstSuccess := false
 	sc := bufio.NewScanner(in)
