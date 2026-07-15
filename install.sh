@@ -27,7 +27,8 @@ usage() {
     echo "Usage: $0 [OPTIONS] <plugin>"
     echo ""
     echo "Arguments:"
-    echo "  plugin    Plugin name: eos-sink-loki | eos-sink-sse | eos-sink-logbench"
+    echo "  plugin    Plugin name: any eos-sink-<name> with a published release"
+    echo "            (see the repo README for available plugins)"
     echo ""
     echo "Options:"
     echo "  --yes, -y           Skip confirmation prompts"
@@ -107,18 +108,6 @@ fetch_latest_version() {
     echo "$response" | grep -o "\"tag_name\":\"${plugin}/v[^\"]*\"" | head -1 | sed -E 's/"tag_name":"[^/]+\/([^"]+)"/\1/'
 }
 
-validate_plugin() {
-    local plugin="$1"
-    case "$plugin" in
-        eos-sink-loki|eos-sink-sse|eos-sink-logbench) return 0 ;;
-        *)
-            error "Unknown plugin: $plugin"
-            dim "  Valid plugins: eos-sink-loki, eos-sink-sse, eos-sink-logbench"
-            exit 1
-            ;;
-    esac
-}
-
 main() {
     local plugin=""
 
@@ -138,21 +127,12 @@ main() {
         exit 1
     fi
 
-    validate_plugin "$plugin"
-
     echo ""
     echo -e "${BOLD}eos plugin installer${NC}"
     echo ""
 
-    info "Running pre-flight checks..."
-    check_root
-
-    local arch download_tool
-    arch=$(detect_arch)
+    local download_tool
     download_tool=$(detect_download_tool)
-    dim "  Plugin:       $plugin"
-    dim "  Architecture: $arch"
-    dim "  Download tool: $download_tool"
 
     local version="${EOS_PLUGIN_VERSION:-}"
     if [ -z "$version" ]; then
@@ -160,6 +140,7 @@ main() {
         version=$(fetch_latest_version "$plugin" "$download_tool")
         if [ -z "$version" ]; then
             error "Failed to fetch latest version for ${plugin}"
+            dim "  Is \"${plugin}\" spelled correctly and published at codeberg.org/${REPO}?"
             dim "  Set EOS_PLUGIN_VERSION to specify manually"
             exit 1
         fi
@@ -167,6 +148,15 @@ main() {
     else
         info "Using version: ${BOLD}${version}${NC}"
     fi
+
+    info "Running pre-flight checks..."
+    check_root
+
+    local arch
+    arch=$(detect_arch)
+    dim "  Plugin:       $plugin"
+    dim "  Architecture: $arch"
+    dim "  Download tool: $download_tool"
 
     echo ""
     echo -e "${BOLD}Installation plan:${NC}"
@@ -246,6 +236,11 @@ main() {
             echo -e "  ${CYAN}    address: \"http://localhost:1447\"${NC}"
             echo -e "  ${CYAN}    options:${NC}"
             echo -e "  ${CYAN}      project_id: \"your-project-id\"${NC}"
+            ;;
+        *)
+            echo -e "  ${CYAN}  - type: ${plugin#eos-sink-}${NC}"
+            echo -e "  ${CYAN}    mode: push${NC}"
+            echo -e "  ${CYAN}    address: \"<sink-address>\"${NC}"
             ;;
     esac
     echo ""
