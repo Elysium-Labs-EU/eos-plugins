@@ -6,13 +6,14 @@ Log sink plugins for [eos](https://codeberg.org/Elysium_Labs/eos). Each plugin i
 
 ## Available plugins
 
-Each plugin lives in its own `eos-sink-<name>/` directory with its own README covering configuration and options — browse the repo to see what's available:
+Each plugin lives in its own `eos-sink-<name>/` directory with its own README covering configuration and options; browse the repo to see what's available:
 
-- [`eos-sink-loki`](eos-sink-loki/README.md) — forwards logs to Grafana Loki
-- [`eos-sink-sse`](eos-sink-sse/README.md) — broadcasts logs as Server-Sent Events over HTTP
-- [`eos-sink-logbench`](eos-sink-logbench/README.md) — ships logs to [Logbench](https://logbench.dev)
+- [`eos-sink-loki`](eos-sink-loki/README.md): forwards logs to Grafana Loki
+- [`eos-sink-sse`](eos-sink-sse/README.md): broadcasts logs as Server-Sent Events over HTTP
+- [`eos-sink-logbench`](eos-sink-logbench/README.md): ships logs to [Logbench](https://logbench.dev)
+- [`eos-sink-otlp`](eos-sink-otlp/README.md): exports logs to an OpenTelemetry (OTLP) collector over gRPC
 
-Want to add your own sink? See [PROTOCOL.md](PROTOCOL.md) for the wire contract and a checklist for adding a new plugin — no changes to this file required, the directory itself is the listing.
+Want to add your own sink? See [PROTOCOL.md](PROTOCOL.md) for the wire contract and a checklist for adding a new plugin. No changes to this file are required; the directory itself is the listing.
 
 ## Install
 
@@ -46,7 +47,7 @@ log_sinks:
     address: "http://your-loki-host:3100"
 ```
 
-`type` maps to a binary on PATH named `eos-sink-<type>` (or use `exec:` for a custom path). eos passes `address` via `EOS_SINK_ADDRESS` and `options` via `EOS_SINK_OPTIONS`. `mode` is `push` (plugin connects outward) or `serve` (plugin binds a local port) — a documentation convention, not enforced by eos. See each plugin's own README for its specific options, and [PROTOCOL.md](PROTOCOL.md) for the full wire contract.
+`type` maps to a binary on PATH named `eos-sink-<type>` (or use `exec:` for a custom path). eos passes `address` via `EOS_SINK_ADDRESS` and `options` via `EOS_SINK_OPTIONS`. `mode` is `push` (plugin connects outward) or `serve` (plugin binds a local port); it is a documentation convention, not enforced by eos. See each plugin's own README for its specific options, and [PROTOCOL.md](PROTOCOL.md) for the full wire contract.
 
 ## License
 
