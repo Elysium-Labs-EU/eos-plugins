@@ -1,5 +1,7 @@
 # eos-sink-loki
 
+> **Frozen (legacy).** This sink is maintained for existing users but receives no new features. It pushes to Loki's older `/loki/api/v1/push` API. For new deployments prefer [`eos-sink-otlp`](../eos-sink-otlp), which exports over OTLP and works with any OpenTelemetry backend, including Loki 3.0+ via its native OTLP endpoint. Grafana now recommends OTLP over backend specific exporters. See [issue #16](https://codeberg.org/Elysium_Labs/eos-plugins/issues/16).
+
 Forwards eos service logs to Grafana Loki's `/loki/api/v1/push` endpoint.
 
 Maps `stderr` stream to `level=error`, `stdout` to `level=info`. The `service` label is set from `EOS_SINK_SERVICE`, which eos populates automatically from the service name. See the [wire protocol](../PROTOCOL.md) for how eos invokes plugins.
