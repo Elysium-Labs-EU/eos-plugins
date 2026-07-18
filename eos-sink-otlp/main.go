@@ -62,6 +62,9 @@ func run(ctx context.Context, in io.Reader) error {
 	if opts.ServiceName != "" {
 		serviceName = opts.ServiceName
 	}
+	if serviceName == "" {
+		return fmt.Errorf("missing service name: set EOS_SINK_SERVICE or options.service_name")
+	}
 
 	endpoint, insecure := parseEndpoint(address, opts.Insecure)
 
@@ -97,7 +100,7 @@ func run(ctx context.Context, in io.Reader) error {
 	logger := provider.Logger("eos-sink-otlp")
 
 	fmt.Println("READY")
-	fmt.Printf("eos-sink-otlp: ready; endpoint=%s insecure=%v service=%s\n", endpoint, insecure, serviceName)
+	fmt.Fprintf(os.Stderr, "eos-sink-otlp: ready; endpoint=%s insecure=%v service=%s\n", endpoint, insecure, serviceName)
 
 	sc := bufio.NewScanner(in)
 	for sc.Scan() {
@@ -117,10 +120,7 @@ func run(ctx context.Context, in io.Reader) error {
 			ts = time.Now()
 		}
 
-		severity := otellog.SeverityInfo
-		if rec.Stream == "stderr" {
-			severity = otellog.SeverityError
-		}
+		severity := severityFor(rec.Stream)
 
 		var lr otellog.Record
 		lr.SetTimestamp(ts)
@@ -135,6 +135,15 @@ func run(ctx context.Context, in io.Reader) error {
 		return fmt.Errorf("reading stdin: %w", err)
 	}
 	return nil
+}
+
+// severityFor maps an eos stream name to an OTLP log severity. The stderr
+// stream is Error; everything else (stdout included) is Info.
+func severityFor(stream string) otellog.Severity {
+	if stream == "stderr" {
+		return otellog.SeverityError
+	}
+	return otellog.SeverityInfo
 }
 
 // parseEndpoint strips the scheme from address and reports whether the
