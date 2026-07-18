@@ -92,7 +92,9 @@ func run(ctx context.Context, in io.Reader) error {
 		sdklog.WithProcessor(processor),
 	)
 	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// eos kills the plugin 3s after closing stdin (PROTOCOL.md), so flush the
+		// final batch inside that window rather than risk being killed mid-flush.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
 		defer cancel()
 		_ = provider.Shutdown(shutdownCtx)
 	}()
