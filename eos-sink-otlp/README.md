@@ -7,7 +7,7 @@ Maps `stderr` stream to severity Error, `stdout` to severity Info, and records t
 ## Install
 
 ```bash
-curl -sSL https://codeberg.org/Elysium_Labs/eos-plugins/raw/branch/main/install.sh | sudo bash -s -- eos-sink-otlp
+curl -sSL https://raw.githubusercontent.com/Elysium-Labs-EU/eos-plugins/main/install.sh | sudo bash -s -- eos-sink-otlp
 ```
 
 Or from source: `cd eos-sink-otlp && make install`
