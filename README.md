@@ -1,8 +1,8 @@
 # eos-plugins
 
-[![Codeberg](https://img.shields.io/badge/Codeberg-eos--plugins-blue?logo=codeberg)](https://codeberg.org/Elysium_Labs/eos-plugins)
+[![GitHub](https://img.shields.io/badge/GitHub-eos--plugins-blue?logo=github)](https://github.com/Elysium-Labs-EU/eos-plugins)
 
-Log sink plugins for [eos](https://codeberg.org/Elysium_Labs/eos). Each plugin is a standalone binary that eos spawns as a subprocess, pipes JSON log records to via stdin, and restarts if it crashes.
+Log sink plugins for [eos](https://github.com/Elysium-Labs-EU/eos). Each plugin is a standalone binary that eos spawns as a subprocess, pipes JSON log records to via stdin, and restarts if it crashes.
 
 ## Available plugins
 
@@ -20,7 +20,7 @@ Want to add your own sink? See [PROTOCOL.md](PROTOCOL.md) for the wire contract 
 **One-line install** (Linux, requires root):
 
 ```bash
-curl -sSL https://codeberg.org/Elysium_Labs/eos-plugins/raw/branch/main/install.sh | sudo bash -s -- <plugin-name>
+curl -sSL https://raw.githubusercontent.com/Elysium-Labs-EU/eos-plugins/main/install.sh | sudo bash -s -- <plugin-name>
 ```
 
 e.g. `-- eos-sink-loki`. The script detects your architecture, downloads the pre-built binary from the plugin's latest release, verifies the SHA256 checksum, and installs to `/usr/local/bin`.

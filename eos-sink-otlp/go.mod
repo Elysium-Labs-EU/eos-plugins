@@ -1,4 +1,4 @@
-module codeberg.org/Elysium_Labs/eos-plugins/eos-sink-otlp
+module github.com/Elysium-Labs-EU/eos-plugins/eos-sink-otlp
 
 go 1.26
 
