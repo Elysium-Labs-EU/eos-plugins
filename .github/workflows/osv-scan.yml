@@ -16,13 +16,13 @@ permissions:
 jobs:
   osv-scan:
     name: OSV Scanner
-    runs-on: codeberg-small
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: eos-sink-loki/go.mod
           cache: true

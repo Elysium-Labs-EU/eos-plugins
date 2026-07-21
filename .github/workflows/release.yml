@@ -14,9 +14,12 @@ on:
         required: true
         default: "v0.1.0"
 
+permissions:
+  contents: read
+
 jobs:
   prepare:
-    runs-on: codeberg-small
+    runs-on: ubuntu-latest
     outputs:
       plugin: ${{ steps.parse.outputs.plugin }}
       version: ${{ steps.parse.outputs.version }}
@@ -37,10 +40,10 @@ jobs:
 
   lint:
     needs: prepare
-    runs-on: codeberg-small
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
       - name: golangci-lint
@@ -51,10 +54,10 @@ jobs:
 
   test:
     needs: prepare
-    runs-on: codeberg-small
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
       - name: Run tests
@@ -70,10 +73,10 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
-    runs-on: codeberg-medium
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
       - name: Build binary
@@ -89,7 +92,7 @@ jobs:
           ls -lh "${ARTIFACT}"
           file "${ARTIFACT}"
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}
           path: ${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}
@@ -98,12 +101,14 @@ jobs:
 
   release:
     needs: [prepare, build]
-    runs-on: codeberg-small
+    runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Prepare release files
@@ -127,17 +132,13 @@ jobs:
           else
             echo "is_prerelease=false" >> $GITHUB_OUTPUT
           fi
-      - name: Create release and upload assets
-        env:
-          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+      - name: Build release notes
         run: |
           PLUGIN="${{ needs.prepare.outputs.plugin }}"
           VERSION="${{ needs.prepare.outputs.version }}"
-          IS_PRERELEASE="${{ steps.prerelease.outputs.is_prerelease }}"
           REPO="${{ github.repository }}"
-          TAG="${PLUGIN}/${VERSION}"
 
-          BODY=$(cat <<EOF
+          cat > release-notes.md <<EOF
           ## ${PLUGIN} ${VERSION}
 
           eos log sink plugin; ships logs from eos-managed services to external destinations.
@@ -145,7 +146,7 @@ jobs:
           ### Quick Installation
 
           \`\`\`bash
-          curl -sSL https://codeberg.org/${REPO}/raw/branch/main/install.sh | sudo bash -s -- ${PLUGIN}
+          curl -sSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo bash -s -- ${PLUGIN}
           \`\`\`
 
           ### Manual Installation
@@ -165,43 +166,16 @@ jobs:
           sha256sum -c sha256sums.txt
           \`\`\`
 
-          See the [README](https://codeberg.org/${REPO}/src/branch/main/${PLUGIN}/README.md) for configuration.
+          See the [README](https://github.com/${REPO}/blob/main/${PLUGIN}/README.md) for configuration.
           EOF
-          )
-
-          RELEASE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://codeberg.org/api/v1/repos/${REPO}/releases" \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg tag "${TAG}" \
-              --arg name "${PLUGIN} ${VERSION}" \
-              --arg body "${BODY}" \
-              --argjson prerelease "${IS_PRERELEASE}" \
-              '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: $prerelease}'
-            )")
-          RELEASE_HTTP_CODE=$(echo "${RELEASE_RESPONSE}" | tail -n1)
-          RELEASE_BODY=$(echo "${RELEASE_RESPONSE}" | sed '$d')
-          RELEASE_ID=$(echo "${RELEASE_BODY}" | jq -r '.id')
-
-          if [ "${RELEASE_HTTP_CODE}" != "201" ] || [ -z "${RELEASE_ID}" ] || [ "${RELEASE_ID}" = "null" ]; then
-            echo "Failed to create release. HTTP: ${RELEASE_HTTP_CODE}, Response: ${RELEASE_BODY}"
-            exit 1
-          fi
-
-          echo "Created release ID: ${RELEASE_ID}"
-
-          for file in release/${PLUGIN}-linux-amd64 release/${PLUGIN}-linux-arm64 release/sha256sums.txt; do
-            filename=$(basename "$file")
-            echo "Uploading ${filename}..."
-            UPLOAD_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-              "https://codeberg.org/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${filename}" \
-              -H "Authorization: token ${GITEA_TOKEN}" \
-              -F "attachment=@${file}")
-            UPLOAD_HTTP_CODE=$(echo "${UPLOAD_RESPONSE}" | tail -n1)
-            if [ "${UPLOAD_HTTP_CODE}" != "201" ]; then
-              echo "Failed to upload ${filename}. HTTP: ${UPLOAD_HTTP_CODE}"
-              exit 1
-            fi
-            echo "Uploaded ${filename} (HTTP ${UPLOAD_HTTP_CODE})"
-          done
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.prepare.outputs.plugin }}/${{ needs.prepare.outputs.version }}
+          name: ${{ needs.prepare.outputs.plugin }} ${{ needs.prepare.outputs.version }}
+          body_path: release-notes.md
+          prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
+          files: |
+            release/${{ needs.prepare.outputs.plugin }}-linux-amd64
+            release/${{ needs.prepare.outputs.plugin }}-linux-arm64
+            release/sha256sums.txt

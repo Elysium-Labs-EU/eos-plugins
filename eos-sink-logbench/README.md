@@ -7,7 +7,7 @@ See the [wire protocol](../PROTOCOL.md) for how eos invokes plugins.
 ## Install
 
 ```bash
-curl -sSL https://codeberg.org/Elysium_Labs/eos-plugins/raw/branch/main/install.sh | sudo bash -s -- eos-sink-logbench
+curl -sSL https://raw.githubusercontent.com/Elysium-Labs-EU/eos-plugins/main/install.sh | sudo bash -s -- eos-sink-logbench
 ```
 
 Or from source: `cd eos-sink-logbench && make install`

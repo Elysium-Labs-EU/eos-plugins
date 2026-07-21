@@ -10,8 +10,9 @@ readonly BOLD='\033[1m'
 readonly DIM='\033[2m'
 readonly NC='\033[0m'
 
-readonly REPO="Elysium_Labs/eos-plugins"
-readonly CODEBERG_URL="https://codeberg.org"
+readonly REPO="Elysium-Labs-EU/eos-plugins"
+readonly GITHUB_URL="https://github.com"
+readonly GITHUB_API_URL="https://api.github.com"
 readonly INSTALL_DIR="${EOS_PLUGIN_INSTALL_DIR:-/usr/local/bin}"
 
 AUTO_YES=false
@@ -39,7 +40,7 @@ usage() {
     echo "  EOS_PLUGIN_VERSION       Version to install (default: latest)"
     echo ""
     echo "Examples:"
-    echo "  curl -sSL https://codeberg.org/${REPO}/raw/branch/main/install.sh | sudo bash -s -- eos-sink-loki"
+    echo "  curl -sSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sudo bash -s -- eos-sink-loki"
     echo "  sudo bash install.sh eos-sink-sse"
 }
 
@@ -97,7 +98,7 @@ download_file() {
 
 fetch_latest_version() {
     local plugin="$1" tool="$2"
-    local url="${CODEBERG_URL}/api/v1/repos/${REPO}/releases?limit=20"
+    local url="${GITHUB_API_URL}/repos/${REPO}/releases?per_page=20"
     local response
     if [ "$tool" = "curl" ]; then
         response=$(curl -fsSL "$url")
@@ -140,7 +141,7 @@ main() {
         version=$(fetch_latest_version "$plugin" "$download_tool")
         if [ -z "$version" ]; then
             error "Failed to fetch latest version for ${plugin}"
-            dim "  Is \"${plugin}\" spelled correctly and published at codeberg.org/${REPO}?"
+            dim "  Is \"${plugin}\" spelled correctly and published at github.com/${REPO}?"
             dim "  Set EOS_PLUGIN_VERSION to specify manually"
             exit 1
         fi
@@ -171,7 +172,7 @@ main() {
     fi
 
     local tag="${plugin}/${version}"
-    local base_url="${CODEBERG_URL}/${REPO}/releases/download/${tag}"
+    local base_url="${GITHUB_URL}/${REPO}/releases/download/${tag}"
     local artifact="${plugin}-linux-${arch}"
     local tmp_binary="/tmp/${plugin}"
     local tmp_checksums="/tmp/${plugin}_sha256sums.txt"
