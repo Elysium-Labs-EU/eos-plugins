@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -104,17 +105,11 @@ func run(ctx context.Context, in io.Reader) error {
 	fmt.Println("READY")
 	fmt.Fprintf(os.Stderr, "eos-sink-otlp: ready; endpoint=%s insecure=%v service=%s\n", endpoint, insecure, serviceName)
 
-	sc := bufio.NewScanner(in)
-	for sc.Scan() {
-		line := sc.Text()
-		if line == "" {
-			continue
-		}
-
+	return readNDJSON(in, func(line string) {
 		var rec record
 		if err := json.Unmarshal([]byte(line), &rec); err != nil {
 			fmt.Fprintf(os.Stderr, "eos-sink-otlp: parse record: %v\n", err)
-			continue
+			return
 		}
 
 		ts, err := time.Parse(time.RFC3339Nano, rec.TS)
@@ -132,11 +127,30 @@ func run(ctx context.Context, in io.Reader) error {
 		lr.AddAttributes(otellog.KeyValue{Key: "log.iostream", Value: otellog.StringValue(rec.Stream)})
 
 		logger.Emit(ctx, lr)
+	})
+}
+
+// readNDJSON calls handle once per newline-delimited line read from r, with
+// the trailing newline (and any \r) stripped. Unlike bufio.Scanner, which
+// aborts the whole read on any single line over its 64KB token limit,
+// bufio.Reader.ReadString has no line-length cap: a service that happens to
+// emit one oversized log line must not stop ingestion for every line after
+// it. Only a genuine read error (not io.EOF) stops the loop.
+func readNDJSON(r io.Reader, handle func(line string)) error {
+	reader := bufio.NewReader(r)
+	for {
+		line, err := reader.ReadString('\n')
+		line = strings.TrimRight(line, "\r\n")
+		if line != "" {
+			handle(line)
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return fmt.Errorf("reading stdin: %w", err)
+		}
 	}
-	if err := sc.Err(); err != nil {
-		return fmt.Errorf("reading stdin: %w", err)
-	}
-	return nil
 }
 
 // severityFor maps an eos stream name to an OTLP log severity. The stderr
