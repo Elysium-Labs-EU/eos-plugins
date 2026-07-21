@@ -22,6 +22,7 @@ OTLP_PORT="4317"
 LOCAL_USER="eos-otlp-tunnel"
 SERVICE_NAME="eos-otlp-tunnel"
 ASSUME_YES="no"
+SKIP_FINGERPRINT_CHECK="no"
 
 usage() {
 	cat <<EOF
@@ -44,7 +45,15 @@ Options:
                                and runs the tunnel. Default: eos-otlp-tunnel
   --service-name NAME         systemd unit name. Default: eos-otlp-tunnel
   -y, --yes                   Don't pause for confirmation before continuing
-                               past the "add this key" step.
+                               past the "add this key" step. Does NOT skip
+                               the host-key fingerprint check below.
+  --skip-fingerprint-check    Pin whatever ssh-keyscan returns without
+                               pausing to verify it out-of-band. This is
+                               the only defense against a MITM'd first
+                               connection — only use it if you've already
+                               verified the fingerprint some other way
+                               (e.g. scripted provisioning that checks it
+                               against your VPS provider's API).
   -h, --help                  Show this help.
 EOF
 }
@@ -59,6 +68,7 @@ while [ $# -gt 0 ]; do
 	--local-user) LOCAL_USER="$2"; shift 2 ;;
 	--service-name) SERVICE_NAME="$2"; shift 2 ;;
 	-y | --yes) ASSUME_YES="yes"; shift ;;
+	--skip-fingerprint-check) SKIP_FINGERPRINT_CHECK="yes"; shift ;;
 	-h | --help) usage; exit 0 ;;
 	*) echo "unknown argument: $1" >&2; usage >&2; exit 1 ;;
 	esac
@@ -138,12 +148,14 @@ fi
 FINGERPRINT="$(ssh-keygen -lf <(echo "$SCAN_LINE" | cut -d' ' -f2-))"
 echo "Host key for ${REMOTE_HOST}: ${FINGERPRINT}"
 echo "Verify this out-of-band (your VPS provider's console/API, or a channel you already trust) before continuing."
-if [ "$ASSUME_YES" != "yes" ]; then
+if [ "$SKIP_FINGERPRINT_CHECK" != "yes" ]; then
 	read -r -p "Matches? [y/N] " CONFIRM
 	if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
 		echo "aborting — fingerprint not confirmed" >&2
 		exit 1
 	fi
+else
+	echo "--skip-fingerprint-check set: pinning without verification." >&2
 fi
 echo "$SCAN_LINE" | sudo -u "$LOCAL_USER" tee -a "$KNOWN_HOSTS" >/dev/null
 chmod 600 "$KNOWN_HOSTS"
@@ -159,7 +171,8 @@ cat >"/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 Description=SSH tunnel (${DIRECTION}) for eos-sink-otlp: 127.0.0.1:${OTLP_PORT} <-> ${REMOTE_HOST}
 After=network-online.target
 Wants=network-online.target
-StartLimitIntervalSec=0
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 Type=simple
