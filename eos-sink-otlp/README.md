@@ -38,6 +38,25 @@ Options are passed as a JSON map via `EOS_SINK_OPTIONS`; string values are `$VAR
 - `headers`: a map of gRPC metadata headers sent with every export, for example an `authorization` header for a collector that requires auth.
 - `insecure`: when `true`, forces an insecure connection even for an `https://` address. An `http://` or bare address is always insecure regardless of this flag.
 
+## Collector on a different host
+
+`address` above works well when the collector is local or already reachable over a network you trust. If the collector is on another VPS, or on a machine behind NAT (e.g. your home network) that can't accept inbound connections, don't reach for TLS/token config here — tunnel loopback-to-loopback over SSH instead, so this plugin always dials `127.0.0.1:<port>` and never needs to know the collector isn't local.
+
+`setup-tunnel.sh` automates that: it creates a dedicated unprivileged user + single-purpose SSH key, prints the exact restricted `authorized_keys` line to add on the other host, writes a self-healing systemd unit, and self-tests the round trip.
+
+```bash
+# On the eos/service host, tunneling out to a collector on another VPS:
+sudo ./setup-tunnel.sh --remote-host collector.example.com
+
+# On the collector host (e.g. your home machine, behind NAT), dialing out
+# to the VPS running eos so eos's loopback reaches back here:
+sudo ./setup-tunnel.sh --direction reverse --remote-host vps.example.com
+```
+
+Run `./setup-tunnel.sh --help` for all options. It only ever touches the host it runs on — the far side's user/key/collector setup is a separate, explicit step it prints instructions for, never done for you silently.
+
+A note if you ever hand-roll this yourself instead: an `authorized_keys` entry like `restrict,permitopen="127.0.0.1:4317"` looks correct against `sshd(8)`'s own documented example, but `restrict` disables port-forwarding as a gate separate from `permitopen`'s allow-list, and `permitopen` alone does not reopen it — at least as of OpenSSH 10.2. You need `restrict,port-forwarding,permitopen="127.0.0.1:4317"` (the script gets this right). Without `port-forwarding`, the tunnel process stays up and the local listening port opens fine, but every connection through it gets silently refused — test the actual round trip, not just that the local socket opens.
+
 ## License
 
 Apache License 2.0; see [LICENSE](LICENSE).
