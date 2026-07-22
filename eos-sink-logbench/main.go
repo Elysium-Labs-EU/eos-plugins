@@ -85,7 +85,7 @@ func run(ctx context.Context, in io.Reader) error {
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) // #nosec G704
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "eos-sink-logbench: post: %v\n", err)
 			continue

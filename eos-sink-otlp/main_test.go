@@ -48,15 +48,15 @@ func TestParseEndpoint(t *testing.T) {
 	cases := []struct {
 		name         string
 		address      string
-		force        bool
 		wantEndpoint string
+		force        bool
 		wantInsecure bool
 	}{
-		{"https keeps tls", "https://otel:4317", false, "otel:4317", false},
-		{"https force insecure wins", "https://otel:4317", true, "otel:4317", true},
-		{"http is insecure", "http://otel:4317", false, "otel:4317", true},
-		{"bare host is insecure", "otel:4317", false, "otel:4317", true},
-		{"bare host force insecure noop", "otel:4317", true, "otel:4317", true},
+		{"https keeps tls", "https://otel:4317", "otel:4317", false, false},
+		{"https force insecure wins", "https://otel:4317", "otel:4317", true, true},
+		{"http is insecure", "http://otel:4317", "otel:4317", false, true},
+		{"bare host is insecure", "otel:4317", "otel:4317", false, true},
+		{"bare host force insecure noop", "otel:4317", "otel:4317", true, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
