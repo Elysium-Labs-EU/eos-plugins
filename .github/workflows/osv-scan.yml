@@ -21,16 +21,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Setup Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: eos-sink-loki/go.mod
-          cache: true
-
-      - name: Install osv-scanner
-        env:
-          GOTOOLCHAIN: auto
-        run: go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
+      # Prebuilt, pinned binary instead of `go install ...@latest`, which compiled
+      # the scanner from source on every run (the real slowness) using this repo's
+      # own Go toolchain — and would break the moment go.mod requires a newer Go
+      # than the runner's ambient toolchain (see eos#34).
+      - name: Install osv-scanner (prebuilt, pinned)
+        run: |
+          curl -sSfL "https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64" -o osv-scanner
+          chmod +x osv-scanner
+          ./osv-scanner --version
 
       - name: Run OSV Scanner
-        run: osv-scanner scan --recursive .
+        run: ./osv-scanner scan --recursive .
