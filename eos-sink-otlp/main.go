@@ -29,8 +29,8 @@ type record struct {
 }
 
 type sinkOptions struct {
-	ServiceName string            `json:"service_name"`
 	Headers     map[string]string `json:"headers"`
+	ServiceName string            `json:"service_name"`
 	Insecure    bool              `json:"insecure"`
 }
 
@@ -92,7 +92,7 @@ func run(ctx context.Context, in io.Reader) error {
 		sdklog.WithResource(res),
 		sdklog.WithProcessor(processor),
 	)
-	defer func() {
+	defer func() { //nolint:contextcheck // deliberately not deriving from ctx: it's already canceled by the signal that triggered this shutdown, and we need a live context to flush within eos's 3s kill window
 		// eos kills the plugin 3s after closing stdin (PROTOCOL.md), so flush the
 		// final batch inside that window rather than risk being killed mid-flush.
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)

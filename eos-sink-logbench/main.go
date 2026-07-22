@@ -79,13 +79,13 @@ func run(ctx context.Context, in io.Reader) error {
 		}
 
 		body, _ := json.Marshal(ingestBody{Content: rec.Msg, Level: level})
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body)) // #nosec G704 -- URL from trusted EOS_SINK_ADDRESS env var
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "eos-sink-logbench: build request: %v\n", err)
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) // #nosec G704
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "eos-sink-logbench: post: %v\n", err)
 			continue

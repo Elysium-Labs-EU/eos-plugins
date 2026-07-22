@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - eos-sink-logbench
+          - eos-sink-loki
+          - eos-sink-otlp
+          - eos-sink-sse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ matrix.plugin }}/go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.11
+          working-directory: ${{ matrix.plugin }}
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - eos-sink-logbench
+          - eos-sink-loki
+          - eos-sink-otlp
+          - eos-sink-sse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ matrix.plugin }}/go.mod
+      - name: Run tests
+        working-directory: ${{ matrix.plugin }}
+        run: go test ./... -v -race

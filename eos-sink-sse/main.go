@@ -99,7 +99,8 @@ func run(ctx context.Context, in io.Reader) error {
 		}
 	})
 
-	ln, err := net.Listen("tcp", address)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", address)
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", address, err)
 	}
