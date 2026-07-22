@@ -33,13 +33,14 @@ import (
 )
 
 type config struct {
-	direction      string
-	remoteHost     string
-	remoteUser     string
-	remoteSSHPort  string
-	otlpPort       string
-	serviceName    string
-	assumeYes      bool
+	direction            string
+	remoteHost           string
+	remoteUser           string
+	remoteSSHPort        string
+	otlpPort             string
+	serviceName          string
+	assumeYes            bool
+	skipFingerprintCheck bool
 }
 
 func main() {
@@ -58,8 +59,9 @@ func parseFlags() config {
 	flag.StringVar(&cfg.remoteSSHPort, "remote-ssh-port", "22", "SSH port on the far side")
 	flag.StringVar(&cfg.otlpPort, "port", "4317", "OTLP port forwarded on both ends")
 	flag.StringVar(&cfg.serviceName, "service-name", "eos-otlp-tunnel", "eos service name for the tunnel")
-	flag.BoolVar(&cfg.assumeYes, "yes", false, "don't pause for confirmation before continuing past the \"add this key\" step")
+	flag.BoolVar(&cfg.assumeYes, "yes", false, "don't pause for confirmation before continuing past the \"add this key\" step. Does NOT skip the host-key fingerprint check — see -skip-fingerprint-check")
 	flag.BoolVar(&cfg.assumeYes, "y", false, "shorthand for -yes")
+	flag.BoolVar(&cfg.skipFingerprintCheck, "skip-fingerprint-check", false, "pin whatever ssh-keyscan returns without pausing to verify it out-of-band. This is the only defense against a MITM'd first connection — only use it if you've already verified the fingerprint some other way (e.g. scripted provisioning that checks it against your VPS provider's API)")
 	flag.Parse()
 	return cfg
 }
@@ -212,7 +214,9 @@ func pinHostKey(cfg config, knownHosts string) error {
 	}
 	fmt.Printf("Host key for %s: %s\n", cfg.remoteHost, fingerprint)
 	fmt.Println("Verify this out-of-band (your VPS provider's console/API, or a channel you already trust) before continuing.")
-	if !cfg.assumeYes {
+	if shouldSkipFingerprintPrompt(cfg) {
+		fmt.Println("-skip-fingerprint-check set: pinning without verification.")
+	} else {
 		answer, err := prompt("Matches? [y/N] ")
 		if err != nil {
 			return err
@@ -234,6 +238,19 @@ func pinHostKey(cfg config, knownHosts string) error {
 		return fmt.Errorf("closing known_hosts: %w", err)
 	}
 	return nil
+}
+
+// shouldSkipFingerprintPrompt reports whether pinHostKey should pin a scanned
+// host key without pausing to verify it out-of-band. Deliberately keyed on
+// skipFingerprintCheck alone, NOT assumeYes: the fingerprint check is the
+// tunnel's only defense against a MITM'd first connection, a materially
+// different risk than the "add this key" convenience pause assumeYes gates.
+// Conflating the two meant a fully non-interactive -yes run silently pinned
+// whatever ssh-keyscan returned with zero verification (eos-plugins#7) —
+// pulled into its own named, tested function specifically so a future
+// refactor can't reintroduce that by accident.
+func shouldSkipFingerprintPrompt(cfg config) bool {
+	return cfg.skipFingerprintCheck
 }
 
 func fingerprintOf(keyLine string) (string, error) {

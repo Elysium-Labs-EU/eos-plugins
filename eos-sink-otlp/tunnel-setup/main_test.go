@@ -51,3 +51,30 @@ func TestShellQuoteBlocksInjection(t *testing.T) {
 		t.Fatal("injection succeeded — marker file was created")
 	}
 }
+
+// TestAssumeYesAloneDoesNotSkipFingerprintCheck guards against eos-plugins#7
+// reappearing: -yes alone must NOT bypass host-key fingerprint verification
+// (the tunnel's only defense against a MITM'd first connection) — only the
+// explicit, separate -skip-fingerprint-check flag may do that.
+func TestAssumeYesAloneDoesNotSkipFingerprintCheck(t *testing.T) {
+	cases := []struct {
+		name                 string
+		assumeYes            bool
+		skipFingerprintCheck bool
+		wantSkip             bool
+	}{
+		{"neither flag", false, false, false},
+		{"yes alone", true, false, false},
+		{"skip-fingerprint-check alone", false, true, true},
+		{"both flags", true, true, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := config{assumeYes: c.assumeYes, skipFingerprintCheck: c.skipFingerprintCheck}
+			if got := shouldSkipFingerprintPrompt(cfg); got != c.wantSkip {
+				t.Errorf("shouldSkipFingerprintPrompt(assumeYes=%v, skipFingerprintCheck=%v) = %v, want %v",
+					c.assumeYes, c.skipFingerprintCheck, got, c.wantSkip)
+			}
+		})
+	}
+}
