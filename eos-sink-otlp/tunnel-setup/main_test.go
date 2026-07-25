@@ -71,7 +71,7 @@ func TestAssumeYesAloneDoesNotSkipFingerprintCheck(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			cfg := config{assumeYes: c.assumeYes, skipFingerprintCheck: c.skipFingerprintCheck}
-			if got := shouldSkipFingerprintPrompt(cfg); got != c.wantSkip {
+			if got := shouldSkipFingerprintPrompt(&cfg); got != c.wantSkip {
 				t.Errorf("shouldSkipFingerprintPrompt(assumeYes=%v, skipFingerprintCheck=%v) = %v, want %v",
 					c.assumeYes, c.skipFingerprintCheck, got, c.wantSkip)
 			}
