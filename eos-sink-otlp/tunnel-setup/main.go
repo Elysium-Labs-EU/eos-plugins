@@ -22,6 +22,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -45,7 +46,7 @@ type config struct {
 
 func main() {
 	cfg := parseFlags()
-	if err := run(cfg); err != nil {
+	if err := run(&cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
@@ -66,7 +67,9 @@ func parseFlags() config {
 	return cfg
 }
 
-func run(cfg config) error {
+func run(cfg *config) error {
+	ctx := context.Background()
+
 	if _, err := exec.LookPath("eos"); err != nil {
 		return fmt.Errorf("eos is not on PATH — install it first: https://github.com/Elysium-Labs-EU/eos")
 	}
@@ -77,9 +80,9 @@ func run(cfg config) error {
 		return fmt.Errorf("-direction must be 'local' or 'reverse'")
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("resolving home directory: %w", err)
+	home, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		return fmt.Errorf("resolving home directory: %w", homeErr)
 	}
 	stateDir := filepath.Join(home, ".eos-otlp-tunnel", cfg.serviceName)
 	keyPath := filepath.Join(stateDir, "otlp_tunnel_key")
@@ -91,10 +94,12 @@ func run(cfg config) error {
 	}
 
 	fmt.Println("== 1/6: tunnel keypair ==")
-	if err := ensureKeypair(keyPath); err != nil {
+	if err := ensureKeypair(ctx, keyPath); err != nil {
 		return err
 	}
-	pubKey, err := os.ReadFile(keyPath + ".pub")
+	// keyPath is built from this process's own home directory and an
+	// operator-supplied -service-name, never from remote/attacker input.
+	pubKey, err := os.ReadFile(keyPath + ".pub") // #nosec G304 -- internal, non-attacker-controlled state path
 	if err != nil {
 		return fmt.Errorf("reading generated public key: %w", err)
 	}
@@ -118,7 +123,7 @@ func run(cfg config) error {
 	}
 
 	fmt.Println("\n== 3/6: pin the remote host key ==")
-	if err := pinHostKey(cfg, knownHosts); err != nil {
+	if err := pinHostKey(ctx, cfg, knownHosts); err != nil {
 		return err
 	}
 
@@ -129,7 +134,7 @@ func run(cfg config) error {
 	// --once: re-running this against an already-healthy tunnel must not
 	// bounce it (eos run without --once restarts an already-running
 	// service, dropping the connection for no reason on a second run).
-	if err := runInteractive("eos", "run", "-f", serviceYAML, "--once"); err != nil {
+	if err := runInteractive(ctx, "eos", "run", "-f", serviceYAML, "--once"); err != nil {
 		return fmt.Errorf("eos run failed: %w", err)
 	}
 
@@ -145,7 +150,7 @@ func run(cfg config) error {
 	// prompt hits EOF immediately — confirmed the hard way in testing).
 	if cfg.assumeYes {
 		fmt.Println("Run 'eos system startup' yourself when ready (skipped here — it prompts interactively).")
-	} else if err := runInteractive("eos", "system", "startup"); err != nil {
+	} else if err := runInteractive(ctx, "eos", "system", "startup"); err != nil {
 		fmt.Fprintln(os.Stderr, "note: 'eos system startup' did not complete — see above.")
 	}
 	fmt.Println("Separately: eos's own health monitor gives up restarting a service after")
@@ -157,26 +162,30 @@ func run(cfg config) error {
 	fmt.Println("went dark, since a dead pipe can't be counted on to report its own death.")
 
 	fmt.Println("\n== 6/6: self-test ==")
-	return selfTest(cfg)
+	return selfTest(ctx, cfg)
 }
 
 // runInteractive runs a command with the real terminal wired through
 // (stdin/stdout/stderr), for subcommands that may prompt interactively.
-func runInteractive(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+// name/args are always literal constants from callers in this file, never
+// attacker- or remote-controlled.
+func runInteractive(ctx context.Context, name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...) // #nosec G204 -- callers in this file always pass literal binary names/args
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
 }
 
-func ensureKeypair(keyPath string) error {
+func ensureKeypair(ctx context.Context, keyPath string) error {
 	if _, err := os.Stat(keyPath); err == nil {
 		fmt.Printf("%s already exists, reusing\n", keyPath)
 		return nil
 	}
 	host, _ := os.Hostname()
-	cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-f", keyPath, "-N", "", "-C", "eos-otlp-tunnel@"+host, "-q")
+	// keyPath is this process's own internal state path and host is the
+	// local machine's own hostname — neither is attacker/remote-controlled.
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-t", "ed25519", "-f", keyPath, "-N", "", "-C", "eos-otlp-tunnel@"+host, "-q") // #nosec G204 -- args built from internal state path and local hostname
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Print(string(out))
 		return fmt.Errorf("generating keypair: %w", err)
@@ -185,7 +194,7 @@ func ensureKeypair(keyPath string) error {
 	return nil
 }
 
-func restrictionLine(cfg config) string {
+func restrictionLine(cfg *config) string {
 	// 'restrict' alone does NOT let 'permitopen'/'permitlisten' re-enable
 	// forwarding — needs the explicit 'port-forwarding' flag too, or sshd
 	// silently refuses every channel-open while still reporting the local
@@ -197,8 +206,10 @@ func restrictionLine(cfg config) string {
 	return fmt.Sprintf(`restrict,port-forwarding,permitlisten="127.0.0.1:%s"`, cfg.otlpPort)
 }
 
-func pinHostKey(cfg config, knownHosts string) error {
-	scan, err := exec.Command("ssh-keyscan", "-t", "ed25519", "-p", cfg.remoteSSHPort, cfg.remoteHost).Output()
+func pinHostKey(ctx context.Context, cfg *config, knownHosts string) error {
+	// remoteSSHPort/remoteHost are operator-supplied flags for this
+	// deliberately-interactive setup tool, not remote/attacker input.
+	scan, err := exec.CommandContext(ctx, "ssh-keyscan", "-t", "ed25519", "-p", cfg.remoteSSHPort, cfg.remoteHost).Output() // #nosec G204 -- operator-supplied config for a local, interactive setup tool
 	if err != nil || len(strings.TrimSpace(string(scan))) == 0 {
 		return fmt.Errorf("could not reach %s:%s to scan its host key", cfg.remoteHost, cfg.remoteSSHPort)
 	}
@@ -208,7 +219,7 @@ func pinHostKey(cfg config, knownHosts string) error {
 	if len(fields) != 2 {
 		return fmt.Errorf("unexpected ssh-keyscan output: %q", scanLine)
 	}
-	fingerprint, err := fingerprintOf(fields[1])
+	fingerprint, err := fingerprintOf(ctx, fields[1])
 	if err != nil {
 		return err
 	}
@@ -217,16 +228,18 @@ func pinHostKey(cfg config, knownHosts string) error {
 	if shouldSkipFingerprintPrompt(cfg) {
 		fmt.Println("-skip-fingerprint-check set: pinning without verification.")
 	} else {
-		answer, err := prompt("Matches? [y/N] ")
-		if err != nil {
-			return err
+		answer, promptErr := prompt("Matches? [y/N] ")
+		if promptErr != nil {
+			return promptErr
 		}
 		if answer != "y" && answer != "Y" {
 			return fmt.Errorf("aborting — fingerprint not confirmed")
 		}
 	}
 
-	f, err := os.OpenFile(knownHosts, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	// knownHosts is built from this process's own internal state directory,
+	// never from remote/attacker input.
+	f, err := os.OpenFile(knownHosts, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) // #nosec G304 -- internal, non-attacker-controlled state path
 	if err != nil {
 		return fmt.Errorf("opening known_hosts: %w", err)
 	}
@@ -249,12 +262,12 @@ func pinHostKey(cfg config, knownHosts string) error {
 // whatever ssh-keyscan returned with zero verification (eos-plugins#7) —
 // pulled into its own named, tested function specifically so a future
 // refactor can't reintroduce that by accident.
-func shouldSkipFingerprintPrompt(cfg config) bool {
+func shouldSkipFingerprintPrompt(cfg *config) bool {
 	return cfg.skipFingerprintCheck
 }
 
-func fingerprintOf(keyLine string) (string, error) {
-	cmd := exec.Command("ssh-keygen", "-lf", "/dev/stdin")
+func fingerprintOf(ctx context.Context, keyLine string) (string, error) {
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-lf", "/dev/stdin")
 	cmd.Stdin = strings.NewReader(keyLine)
 	out, err := cmd.Output()
 	if err != nil {
@@ -263,7 +276,7 @@ func fingerprintOf(keyLine string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-func writeServiceYAML(cfg config, serviceYAML, keyPath, knownHosts string) error {
+func writeServiceYAML(cfg *config, serviceYAML, keyPath, knownHosts string) error {
 	forwardFlag := fmt.Sprintf("127.0.0.1:%s:127.0.0.1:%s", cfg.otlpPort, cfg.otlpPort)
 	args := []string{
 		"ssh", "-N",
@@ -310,7 +323,7 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-func selfTest(cfg config) error {
+func selfTest(ctx context.Context, cfg *config) error {
 	if cfg.direction != "local" {
 		fmt.Printf("Tunnel started. This host can't self-test the far end (that's on %s).\n", cfg.remoteHost)
 		fmt.Printf("On %s, verify with:\n", cfg.remoteHost)
@@ -320,12 +333,13 @@ func selfTest(cfg config) error {
 	}
 
 	addr := net.JoinHostPort("127.0.0.1", cfg.otlpPort)
+	dialer := net.Dialer{Timeout: 3 * time.Second}
 	// eos run returns as soon as the process forks — well before ssh has
 	// finished DNS/handshake/auth/forwarding setup, especially on a slow
 	// link. Poll instead of trusting a single fixed sleep.
 	var lastErr error
 	for attempt := 0; attempt < 5; attempt++ {
-		conn, err := net.DialTimeout("tcp", addr, 3*time.Second)
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
 			_ = conn.Close()
 			fmt.Printf("OK: %s reachable locally through the tunnel.\n", addr)
