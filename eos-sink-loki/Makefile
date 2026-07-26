@@ -1,4 +1,4 @@
-.PHONY: help list build install build-linux install-orb release
+.PHONY: help list build install build-linux install-orb release crap crap-report
 
 BINARY_NAME=eos-sink-loki
 GOBIN=./bin
@@ -29,6 +29,14 @@ build-linux: ## Cross-compile for Linux (amd64)
 install-orb: build-linux ## Install into OrbStack $(ORB_MACHINE) at /usr/local/bin
 	orb run -m $(ORB_MACHINE) bash -lc "sudo cp $(PWD)/bin/$(BINARY_NAME)-linux /usr/local/bin/$(BINARY_NAME)"
 	@echo "Installed $(BINARY_NAME) in OrbStack $(ORB_MACHINE)"
+
+crap: ## Run go-crap change-risk analysis (hard gate on changed functions only, requires: go install github.com/padiazg/go-crap@latest)
+	@command -v go-crap >/dev/null 2>&1 || { echo "go-crap not found. Run: go install github.com/padiazg/go-crap@latest"; exit 1; }
+	bash ../scripts/go-crap-gate.sh
+
+crap-report: ## Full whole-module go-crap debt report (informational, no gate)
+	@command -v go-crap >/dev/null 2>&1 || { echo "go-crap not found. Run: go install github.com/padiazg/go-crap@latest"; exit 1; }
+	go-crap scan . --exclude '.*_test\.go'
 
 release: ## Tag and push release (usage: make release TAG=v0.1.0)
 	@test -n "$(TAG)" || (echo "usage: make release TAG=v0.1.0" && exit 1)
