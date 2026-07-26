@@ -53,3 +53,26 @@ jobs:
       - name: Run tests
         working-directory: ${{ matrix.plugin }}
         run: go test ./... -v -race
+
+  crap:
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - eos-sink-logbench
+          - eos-sink-loki
+          - eos-sink-otlp
+          - eos-sink-sse
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # go-crap-gate diffs changed functions against origin/main
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ matrix.plugin }}/go.mod
+      - name: Install go-crap
+        run: go install github.com/padiazg/go-crap@latest
+      - name: Run go-crap gate
+        working-directory: ${{ matrix.plugin }}
+        run: make crap

@@ -1,0 +1,21 @@
+# eos-plugins is a monorepo of independent Go modules (one per sink plugin),
+# unlike eos/argus/themis where the repo root IS the module. A single global
+# glob is enough because go-crap-gate.sh itself no-ops (exit 0) for any module
+# whose .go files didn't change vs origin/main -- see scripts/go-crap-gate.sh.
+pre-push:
+  commands:
+    crap-logbench:
+      glob: "*.go"
+      run: cd eos-sink-logbench && make crap
+
+    crap-loki:
+      glob: "*.go"
+      run: cd eos-sink-loki && make crap
+
+    crap-otlp:
+      glob: "*.go"
+      run: cd eos-sink-otlp && make crap
+
+    crap-sse:
+      glob: "*.go"
+      run: cd eos-sink-sse && make crap
