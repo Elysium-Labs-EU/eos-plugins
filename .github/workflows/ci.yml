@@ -14,6 +14,13 @@ permissions:
   pull-requests: read
 
 jobs:
+  typos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check for typos
+        uses: crate-ci/typos@bee27e3a4fd1ea2111cf90ab89cd076c870fce14 # v1.48.0
+
   lint:
     strategy:
       fail-fast: false
@@ -50,9 +57,35 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ matrix.plugin }}/go.mod
+      - name: go mod verify
+        working-directory: ${{ matrix.plugin }}
+        run: go mod verify
       - name: Run tests
         working-directory: ${{ matrix.plugin }}
         run: go test ./... -v -race
+
+  protocol-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check plugin contract against PROTOCOL.md
+        run: ./scripts/check-protocol-drift.sh
+
+  any-convention:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check any-vs-interface{} convention
+        run: ./scripts/check-any-convention.sh
+
+  large-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # diffs changed files against origin/main
+      - name: Check for large or binary blobs
+        run: ./scripts/check-large-files.sh
 
   crap:
     strategy:
