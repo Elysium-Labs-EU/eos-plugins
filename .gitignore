@@ -1,3 +1,4 @@
 bin/
 eos-sink-*
 !eos-sink-*/
+coverage.out
