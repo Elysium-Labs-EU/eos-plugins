@@ -62,4 +62,4 @@ eos runs whatever `exec` points to, unchanged otherwise — same handshake, same
 2. Add a `Makefile` with `build`, `install`, `build-linux`, and `release` targets — copy one from an existing plugin, they're identical apart from `BINARY_NAME`.
 3. Add `eos-sink-<name>/README.md` covering your plugin's options.
 4. Add an entry to the root [README.md](README.md#available-plugins) pointing at it (this is the only shared file you need to touch).
-5. To publish a release: tag `eos-sink-<name>/vX.Y.Z` and push. The existing Forgejo workflow (`.forgejo/workflows/release.yml`) builds, tests, and publishes it automatically — no per-plugin CI config needed, it parses the plugin name out of the tag.
+5. To publish a release: tag `eos-sink-<name>/vX.Y.Z` and push. The release workflow (`.github/workflows/release.yml`) builds, tests, and publishes it automatically — no per-plugin CI config needed, it parses the plugin name out of the tag.
