@@ -10,10 +10,27 @@ eos resolves the binary for a `service.yaml` entry with `type: <name>` by lookin
 - `EOS_SINK_TYPE` — the sink `type`
 - `EOS_SINK_ADDRESS` — the sink entry's `address`
 - `EOS_SINK_OPTIONS` — the sink entry's `options` map, JSON-encoded (string values are `$VAR`-expanded from the environment before encoding)
+- `EOS_SINK_PROTOCOL_VERSION` — the highest wire-protocol version this eos speaks (see [Handshake](#handshake))
 
 ## Handshake
 
-On startup, the plugin must write `READY\n` to stdout within **10 seconds**. eos buffers nothing before this; it will not send records until it sees `READY`, and kills the plugin if the timeout elapses. Anything the plugin writes to stdout after `READY` is currently discarded (reserved for a future ACK protocol) — don't rely on it being read.
+On startup, the plugin must write `READY\n` to stdout within **10 seconds**. eos buffers nothing before this; it will not send records until it sees `READY`, and kills the plugin if the timeout elapses. Anything the plugin writes to stdout after the handshake line is currently discarded (reserved for a future ACK protocol) — don't rely on it being read.
+
+### Protocol version
+
+The `READY` line may carry the protocol version the plugin speaks:
+
+```
+READY 1
+```
+
+A bare `READY` means version 1, the format described in this document. **That will never become an error**, so a plugin written before this section existed keeps working and does not need to be updated. Anything after the version token is reserved and ignored.
+
+eos accepts any version at or below its own and speaks the lower of the two. A version *above* what eos speaks is refused: eos kills the plugin and logs both numbers, since it can always serve an older plugin and never a newer one. A version token that isn't a positive integer is refused the same way.
+
+Read `EOS_SINK_PROTOCOL_VERSION` if you want to decide before the handshake, either to adapt to an older eos or to exit with a message of your own rather than being killed. Plugins are released independently of eos and `exec:` sinks are never released at all, so no version pairing is guaranteed.
+
+Only version 1 exists today. There is nothing to negotiate yet; the mechanism is here so the first format change doesn't strand plugins in the field.
 
 ## Record format
 
