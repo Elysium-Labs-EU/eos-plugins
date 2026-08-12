@@ -96,17 +96,57 @@ download_file() {
     fi
 }
 
+# extract_release_pairs prints one "<prerelease> <tag_name>" line per release
+# from a /releases list JSON blob on stdin. Both fields are release-level only
+# (neither appears in the nested assets array), so a flat grep of each yields
+# two lists that pair up 1:1 in list order.
+extract_release_pairs() {
+    local json scratch
+    json="$(cat)"
+    scratch="$(mktemp -d)"
+    printf '%s' "$json" | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]+)"$/\1/' >"$scratch/tags"
+    printf '%s' "$json" | grep -o '"prerelease"[[:space:]]*:[[:space:]]*[a-z]*' | sed -E 's/.*:[[:space:]]*//' >"$scratch/prerelease"
+    paste -d ' ' "$scratch/prerelease" "$scratch/tags"
+    rm -rf "$scratch"
+}
+
+# select_plugin_version prints the newest version for $plugin from a /releases
+# list JSON blob on stdin, with the "<plugin>/" tag prefix stripped.
+#
+# One repo publishes tags for several plugins, so the list is filtered to the
+# requested plugin before any version comparison; an unfiltered "newest
+# release" would routinely belong to a different plugin.
+#
+# Stable releases win over prereleases outright rather than by sort order:
+# sort -V places a bare "v0.1.0" before "v0.1.0-rc.9", the opposite of semver
+# precedence, so sorting the combined list would return a prerelease as
+# newest. List position is not trusted either; the releases list is
+# documented newest-first but has been observed returning a freshly
+# published release out of order.
+select_plugin_version() {
+    local plugin="$1" pairs stable
+    pairs="$(extract_release_pairs)"
+    stable=$(printf '%s\n' "$pairs" | awk -v p="^${plugin}/v" '$1 == "false" && $2 ~ p { print $2 }' | sed "s|^${plugin}/||" | sort -V | tail -1)
+    if [ -n "$stable" ]; then
+        printf '%s' "$stable"
+        return
+    fi
+    printf '%s\n' "$pairs" | awk -v p="^${plugin}/v" '$2 ~ p { print $2 }' | sed "s|^${plugin}/||" | sort -V | tail -1
+}
+
+# fetch_latest_version resolves the newest published version for $plugin.
+# It scans the full releases list rather than /releases/latest, which answers
+# for the repo as a whole and so usually names some other plugin's release.
 fetch_latest_version() {
     local plugin="$1" tool="$2"
-    local url="${GITHUB_API_URL}/repos/${REPO}/releases?per_page=20"
+    local url="${GITHUB_API_URL}/repos/${REPO}/releases?per_page=100"
     local response
     if [ "$tool" = "curl" ]; then
-        response=$(curl -fsSL "$url")
+        response=$(curl -fsSL "$url") || return 1
     else
-        response=$(wget -qO- "$url")
+        response=$(wget -qO- "$url") || return 1
     fi
-    # Find first release tag matching <plugin>/v*
-    echo "$response" | grep -o "\"tag_name\":\"${plugin}/v[^\"]*\"" | head -1 | sed -E 's/"tag_name":"[^/]+\/([^"]+)"/\1/'
+    printf '%s' "$response" | select_plugin_version "$plugin"
 }
 
 main() {
