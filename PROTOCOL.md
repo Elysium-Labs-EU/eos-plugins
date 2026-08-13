@@ -73,10 +73,23 @@ log_sinks:
 
 eos runs whatever `exec` points to, unchanged otherwise — same handshake, same record format, same env vars.
 
+## Installer contract
+
+Any script that installs an eos plugin — this repo's shared `install.sh`, or a third party's own, for a plugin published outside this repo — should guarantee the following. Nothing enforces this automatically; it's on the installer's author, the same way wire-protocol compliance above is on the plugin's author.
+
+- **Integrity**: verify a checksum (SHA256 or stronger) before installing. Detached-signature verification (like eos core's `sha256sums.txt.sig`) is a stronger guarantee and recommended, but not required today — this repo's own `install.sh` is checksum-only for now.
+- **Atomicity**: download and verify into a private temp location (`mktemp -d`, cleaned up on every exit path), then move the verified binary into place. A partial or corrupt binary must never be observable at the final install path. A predictable temp path (e.g. `/tmp/<name>` instead of `mktemp`) is a symlink-attack surface when the installer runs as root.
+- **Idempotency**: re-running the installer for the same version is safe and produces the same result.
+- **Fails closed**: an unsupported architecture, failed download, or checksum mismatch exits nonzero and leaves no partial state on the target system.
+- **Guides the user**: warn (don't necessarily block) if the parent tool isn't present on `PATH`; confirm after install that the binary actually resolves on `PATH` (the `eos-sink-<type>` lookup depends on it); print the `service.yaml` snippet needed next.
+- **Env var convention**: `<PREFIX>_INSTALL_DIR` and `<PREFIX>_VERSION` for the install location and a version pin, mirroring `EOS_PLUGIN_INSTALL_DIR`/`EOS_PLUGIN_VERSION` here.
+
+A plugin added to this repo (see below) inherits this contract for free through the shared `install.sh` and doesn't need its own installer.
+
 ## Writing a new sink
 
 1. Create `eos-sink-<name>/` with `main.go`. `eos-sink-loki` is the smallest reference implementation.
 2. Add a `Makefile` with `build`, `install`, `build-linux`, and `release` targets — copy one from an existing plugin, they're identical apart from `BINARY_NAME`.
 3. Add `eos-sink-<name>/README.md` covering your plugin's options.
-4. Add an entry to the root [README.md](README.md#available-plugins) pointing at it (this is the only shared file you need to touch).
+4. Add an entry to the root [README.md](README.md#available-plugins) pointing at it. This is the only shared file you need to touch; the shared `install.sh` already satisfies the [installer contract](#installer-contract) above for any plugin published in this repo.
 5. To publish a release: tag `eos-sink-<name>/vX.Y.Z` and push. The release workflow (`.github/workflows/release.yml`) builds, tests, and publishes it automatically — no per-plugin CI config needed, it parses the plugin name out of the tag.

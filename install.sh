@@ -66,6 +66,15 @@ check_root() {
     fi
 }
 
+# check_eos_present warns (does not block) if eos itself isn't on PATH -- a
+# sink plugin has nothing to run under without it.
+check_eos_present() {
+    if ! command -v eos &>/dev/null; then
+        warn "eos was not found on PATH"
+        dim "  A sink plugin is useless without eos managing it: https://github.com/Elysium-Labs-EU/eos#install"
+    fi
+}
+
 detect_arch() {
     case $(uname -m) in
         x86_64)       echo "amd64" ;;
@@ -139,7 +148,8 @@ select_plugin_version() {
 # for the repo as a whole and so usually names some other plugin's release.
 fetch_latest_version() {
     local plugin="$1" tool="$2"
-    local url="${GITHUB_API_URL}/repos/${REPO}/releases?per_page=100"
+    local api_base="${EOS_PLUGIN_API_BASE:-${GITHUB_API_URL}/repos/${REPO}}"
+    local url="${api_base}/releases?per_page=100"
     local response
     if [ "$tool" = "curl" ]; then
         response=$(curl -fsSL "$url") || return 1
@@ -192,6 +202,7 @@ main() {
 
     info "Running pre-flight checks..."
     check_root
+    check_eos_present
 
     local arch
     arch=$(detect_arch)
@@ -214,8 +225,23 @@ main() {
     local tag="${plugin}/${version}"
     local base_url="${GITHUB_URL}/${REPO}/releases/download/${tag}"
     local artifact="${plugin}-linux-${arch}"
-    local tmp_binary="/tmp/${plugin}"
-    local tmp_checksums="/tmp/${plugin}_sha256sums.txt"
+
+    # A predictable /tmp path is a symlink-attack surface when this script
+    # runs as root: a local user could pre-create it pointing elsewhere
+    # before root runs the installer. mktemp -d plus a private dir sidesteps
+    # that; the trap guarantees cleanup on any exit path, including the
+    # error returns below.
+    #
+    # tmp_dir is deliberately NOT `local`: an EXIT trap runs after the
+    # function that registered it has already returned, in the top-level
+    # script scope -- a `local` binding from inside main() is torn down by
+    # then, so the trap would see an empty/undefined variable and silently
+    # no-op instead of cleaning up (confirmed live; this is why the fixed
+    # /tmp path this replaces never had a working cleanup path either).
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/eos-plugin-install.XXXXXXXX")" || { error "Failed to create secure temp dir"; exit 1; }
+    trap 'rm -rf "${tmp_dir:-}"' EXIT
+    local tmp_binary="${tmp_dir}/${plugin}"
+    local tmp_checksums="${tmp_dir}/sha256sums.txt"
 
     step "Downloading ${artifact}..."
     if ! download_file "${base_url}/${artifact}" "$tmp_binary" "$download_tool"; then
@@ -242,18 +268,22 @@ main() {
         error "Checksum mismatch; binary may be corrupted"
         dim "  expected: $expected"
         dim "  got:      $actual"
-        rm -f "$tmp_binary" "$tmp_checksums"
         exit 1
     fi
-    rm -f "$tmp_checksums"
     success "Checksum verified"
 
     step "Installing binary..."
     mkdir -p "$INSTALL_DIR"
     chmod +x "$tmp_binary"
-    cp "$tmp_binary" "${INSTALL_DIR}/${plugin}"
-    rm -f "$tmp_binary"
-    success "Installed to ${INSTALL_DIR}/${plugin}"
+    local final_binary="${INSTALL_DIR}/${plugin}"
+    mv -f "$tmp_binary" "$final_binary"
+    success "Installed to ${final_binary}"
+
+    if ! command -v "$plugin" &>/dev/null; then
+        warn "${INSTALL_DIR} does not appear to be on PATH"
+        dim "  eos resolves sink plugins by looking up eos-sink-<type> on PATH -- add it:"
+        dim "    export PATH=\"${INSTALL_DIR}:\$PATH\""
+    fi
 
     echo ""
     echo -e "${GREEN}${BOLD}Done!${NC} ${plugin} ${version} installed."
@@ -285,6 +315,13 @@ main() {
             ;;
     esac
     echo ""
+    dim "Full option reference (streams, buffer_size, restart_delay_ms, exec, args, named sinks):"
+    dim "  https://github.com/${REPO}#configuration"
+    echo ""
 }
 
-main "$@"
+# Only run main when this file is executed directly, not when tests `source`
+# it to call its helper functions (e.g. select_plugin_version) in isolation.
+if [[ "${BASH_SOURCE[0]:-${0}}" == "${0}" ]]; then
+    main "$@"
+fi

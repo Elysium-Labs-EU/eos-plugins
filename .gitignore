@@ -2,3 +2,5 @@ bin/
 eos-sink-*
 !eos-sink-*/
 coverage.out
+.cache/
+.claude/
