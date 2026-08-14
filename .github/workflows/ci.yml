@@ -71,6 +71,15 @@ jobs:
       - name: Check plugin contract against PROTOCOL.md
         run: ./scripts/check-protocol-drift.sh
 
+  install-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shellcheck install.sh and scripts
+        run: shellcheck install.sh scripts/*.sh
+      - name: Run install.sh unit tests
+        run: ./scripts/test-install.sh
+
   any-convention:
     runs-on: ubuntu-latest
     steps:
