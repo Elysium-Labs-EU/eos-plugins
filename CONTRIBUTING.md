@@ -28,12 +28,12 @@ CI lints and tests each plugin independently. From the plugin's own directory:
 ```bash
 cd eos-sink-<name>
 go test ./... -race
-GOLANGCI_LINT_CACHE="$(git rev-parse --show-toplevel)/.cache/golangci-lint" golangci-lint run
+make lint
 ```
 
 Both must pass before opening a PR. A change to one plugin does not require touching the others; CI runs each plugin's checks separately and only fails for the plugins you changed.
 
-Set `GOLANGCI_LINT_CACHE` per checkout as shown. golangci-lint's cache is keyed on file content, so identical sources in two worktrees collide in the one shared per-user cache and a clean tree can be served the other tree's stored findings, complete with the absolute paths recorded when they were first analysed. Keeping the cache inside the checkout makes collision impossible.
+Use `make lint` rather than calling `golangci-lint` directly. The Makefile points `GOLANGCI_LINT_CACHE` at the module's own `.cache/` directory, and the cache is keyed on file content: identical sources in two checkouts collide in the one shared per-user cache, and a clean tree can be served the other tree's stored findings, complete with the absolute paths recorded when they were first analysed. `make fmt` applies the formatters the same way. The pre-commit hooks run both for whichever plugin you touched.
 
 Changing `install.sh` also means running its own checks from the repo root:
 

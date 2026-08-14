@@ -2,6 +2,48 @@
 # unlike eos/argus/themis where the repo root IS the module. A single global
 # glob is enough because go-crap-gate.sh itself no-ops (exit 0) for any module
 # whose .go files didn't change vs origin/main -- see scripts/go-crap-gate.sh.
+
+# These invoke `make lint`/`make fmt` rather than golangci-lint directly, which
+# is why they carry no inline GOLANGCI_LINT_CACHE the way eos/argus/themis
+# hooks do: each plugin's Makefile exports the variable itself, so running
+# through make already isolates the cache to that module's own .cache/
+# directory. Calling golangci-lint straight from here would bypass that export
+# and fall back to the shared per-user cache, where identical sources in two
+# checkouts collide and one tree can be served the other's stored findings.
+pre-commit:
+  commands:
+    fmt-logbench:
+      glob: "eos-sink-logbench/{*.go,**/*.go}"
+      run: (cd eos-sink-logbench && make fmt) && git add {staged_files}
+
+    fmt-loki:
+      glob: "eos-sink-loki/{*.go,**/*.go}"
+      run: (cd eos-sink-loki && make fmt) && git add {staged_files}
+
+    fmt-otlp:
+      glob: "eos-sink-otlp/{*.go,**/*.go}"
+      run: (cd eos-sink-otlp && make fmt) && git add {staged_files}
+
+    fmt-sse:
+      glob: "eos-sink-sse/{*.go,**/*.go}"
+      run: (cd eos-sink-sse && make fmt) && git add {staged_files}
+
+    lint-logbench:
+      glob: "eos-sink-logbench/{*.go,**/*.go}"
+      run: cd eos-sink-logbench && make lint
+
+    lint-loki:
+      glob: "eos-sink-loki/{*.go,**/*.go}"
+      run: cd eos-sink-loki && make lint
+
+    lint-otlp:
+      glob: "eos-sink-otlp/{*.go,**/*.go}"
+      run: cd eos-sink-otlp && make lint
+
+    lint-sse:
+      glob: "eos-sink-sse/{*.go,**/*.go}"
+      run: cd eos-sink-sse && make lint
+
 pre-push:
   commands:
     crap-logbench:
