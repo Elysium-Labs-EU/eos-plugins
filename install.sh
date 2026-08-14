@@ -105,6 +105,26 @@ download_file() {
     fi
 }
 
+# make_staging_dir creates the private directory downloads are verified in
+# and registers its cleanup, setting the global tmp_dir on success.
+#
+# A predictable /tmp path is a symlink-attack surface when this script runs as
+# root: a local user could pre-create it pointing elsewhere before root runs
+# the installer. mktemp -d plus a private dir sidesteps that; the trap
+# guarantees cleanup on any exit path, including the error returns in main.
+#
+# tmp_dir is deliberately NOT `local`, and this is deliberately not called in
+# a command substitution: an EXIT trap runs after the function that
+# registered it has already returned, in the top-level script scope. A
+# `local` binding is torn down by then, so the trap expands an empty variable
+# and silently no-ops instead of cleaning up, and a `$(...)` call would fire
+# the trap the moment the subshell exits and delete the dir out from under
+# the caller. Callers read $tmp_dir after calling this plainly.
+make_staging_dir() {
+    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/eos-plugin-install.XXXXXXXX")" || return 1
+    trap 'rm -rf "${tmp_dir:-}"' EXIT
+}
+
 # extract_release_pairs prints one "<prerelease> <tag_name>" line per release
 # from a /releases list JSON blob on stdin. Both fields are release-level only
 # (neither appears in the nested assets array), so a flat grep of each yields
@@ -226,20 +246,7 @@ main() {
     local base_url="${GITHUB_URL}/${REPO}/releases/download/${tag}"
     local artifact="${plugin}-linux-${arch}"
 
-    # A predictable /tmp path is a symlink-attack surface when this script
-    # runs as root: a local user could pre-create it pointing elsewhere
-    # before root runs the installer. mktemp -d plus a private dir sidesteps
-    # that; the trap guarantees cleanup on any exit path, including the
-    # error returns below.
-    #
-    # tmp_dir is deliberately NOT `local`: an EXIT trap runs after the
-    # function that registered it has already returned, in the top-level
-    # script scope -- a `local` binding from inside main() is torn down by
-    # then, so the trap would see an empty/undefined variable and silently
-    # no-op instead of cleaning up (confirmed live; this is why the fixed
-    # /tmp path this replaces never had a working cleanup path either).
-    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/eos-plugin-install.XXXXXXXX")" || { error "Failed to create secure temp dir"; exit 1; }
-    trap 'rm -rf "${tmp_dir:-}"' EXIT
+    make_staging_dir || { error "Failed to create secure temp dir"; exit 1; }
     local tmp_binary="${tmp_dir}/${plugin}"
     local tmp_checksums="${tmp_dir}/sha256sums.txt"
 

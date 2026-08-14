@@ -136,6 +136,35 @@ else
     echo "SKIP: python3 unavailable; fetch_latest_version not covered"
 fi
 
+# --- make_staging_dir ----------------------------------------------------
+
+# The staging dir has to be gone once the installer exits, and present while
+# it runs. Both halves are asserted from out here rather than from inside the
+# script: the EXIT trap that removes it fires as the bash process dies, so an
+# in-script check would pass whether or not the trap actually works.
+staging_dir="$(bash -c 'source install.sh; make_staging_dir; printf "%s" "$tmp_dir"')"
+if [ -n "$staging_dir" ]; then
+    echo "PASS: make_staging_dir sets tmp_dir"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL: make_staging_dir set no tmp_dir"
+    FAILED=$((FAILED + 1))
+fi
+
+if [ -n "$staging_dir" ] && [ ! -e "$staging_dir" ]; then
+    echo "PASS: staging dir is removed when the installer exits"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL: staging dir ${staging_dir} still exists after the script exited"
+    rm -rf "${staging_dir:?}"
+    FAILED=$((FAILED + 1))
+fi
+
+# shellcheck disable=SC2016  # run() hands this to `bash -c`; $tmp_dir must expand there, not here.
+run "staging dir is writable while the installer runs" \
+    'make_staging_dir; touch "${tmp_dir}/probe" && [ -f "${tmp_dir}/probe" ] && printf ok' \
+    "ok"
+
 # --- detect_arch ---------------------------------------------------------
 
 run "detect_arch maps x86_64 to amd64" \
