@@ -35,6 +35,8 @@ Both must pass before opening a PR. A change to one plugin does not require touc
 
 Use `make lint` rather than calling `golangci-lint` directly. The Makefile points `GOLANGCI_LINT_CACHE` at the module's own `.cache/` directory, and the cache is keyed on file content: identical sources in two checkouts collide in the one shared per-user cache, and a clean tree can be served the other tree's stored findings, complete with the absolute paths recorded when they were first analysed. `make fmt` applies the formatters the same way. The pre-commit hooks run both for whichever plugin you touched.
 
+`make lint` also runs a specific linter version rather than whatever is on your `PATH`. The version lives in `.golangci-version` at the repo root, read by the Makefiles and by both CI workflows, so the gate and your local run can never disagree. Bumping it is a one-line change to that file; `scripts/check-golangci-pin.sh` fails if a version is hardcoded anywhere else or a Makefile falls back to the `PATH` binary. Dependabot does not bump this value, only `uses:` refs, so it stays exact on purpose.
+
 Changing `install.sh` also means running its own checks from the repo root:
 
 ```bash

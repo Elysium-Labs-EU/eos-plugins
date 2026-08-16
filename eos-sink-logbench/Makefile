@@ -13,6 +13,15 @@ ORB_MACHINE ?= debian
 # that owns it. Must be absolute; $(CURDIR) is.
 export GOLANGCI_LINT_CACHE := $(CURDIR)/.cache/golangci-lint
 
+# The linter version lives in one file at the repo root, read by both this
+# target and the CI workflows, and is run through `go run` rather than
+# whatever golangci-lint happens to be on PATH. A newer local binary than the
+# gate uses does not just warn differently -- it disagrees: in a sibling repo
+# three versions gave three verdicts on one unchanged line, one of them
+# reporting a nolint directive as dead that the other two needed.
+GOLANGCI_VERSION := $(shell cat $(CURDIR)/../.golangci-version)
+GOLANGCI := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}' | sort
@@ -38,11 +47,11 @@ install-orb: build-linux ## Install into OrbStack $(ORB_MACHINE) at /usr/local/b
 	orb run -m $(ORB_MACHINE) bash -lc "sudo cp $(PWD)/bin/$(BINARY_NAME)-linux /usr/local/bin/$(BINARY_NAME)"
 	@echo "Installed $(BINARY_NAME) in OrbStack $(ORB_MACHINE)"
 
-lint: ## Run golangci-lint over this plugin
-	golangci-lint run --timeout=5m
+lint: ## Run golangci-lint over this plugin (pinned by ../.golangci-version)
+	$(GOLANGCI) run --timeout=5m
 
-fmt: ## Apply golangci-lint's formatters over this plugin
-	golangci-lint fmt
+fmt: ## Apply golangci-lint's formatters over this plugin (pinned by ../.golangci-version)
+	$(GOLANGCI) fmt
 
 crap: ## Run go-crap change-risk analysis (hard gate on changed functions only, requires: go install github.com/padiazg/go-crap@latest)
 	@command -v go-crap >/dev/null 2>&1 || { echo "go-crap not found. Run: go install github.com/padiazg/go-crap@latest"; exit 1; }
