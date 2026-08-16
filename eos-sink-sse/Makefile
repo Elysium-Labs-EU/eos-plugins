@@ -52,7 +52,12 @@ crap-report: ## Full whole-module go-crap debt report (informational, no gate)
 	@command -v go-crap >/dev/null 2>&1 || { echo "go-crap not found. Run: go install github.com/padiazg/go-crap@latest"; exit 1; }
 	go-crap scan . --exclude '.*_test\.go'
 
-release: ## Tag and push release (usage: make release TAG=v0.1.0)
+# Releasing several plugins at once must go through ../scripts/release.sh:
+# GitHub Actions creates no tag events when more than three tags land in
+# one push, and this repo ships four plugins, so the whole set tagged in a
+# single push publishes nothing and reports no error. One tag per push is
+# always safe, which is what this target does.
+release: ## Tag and push this plugin's release (usage: make release TAG=v0.1.0)
 	@test -n "$(TAG)" || (echo "usage: make release TAG=v0.1.0" && exit 1)
 	git tag $(BINARY_NAME)/$(TAG)
 	git push origin $(BINARY_NAME)/$(TAG)

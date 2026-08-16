@@ -79,6 +79,8 @@ jobs:
         run: shellcheck install.sh scripts/*.sh
       - name: Run install.sh unit tests
         run: ./scripts/test-install.sh
+      - name: Run release.sh unit tests
+        run: ./scripts/test-release.sh
 
   any-convention:
     runs-on: ubuntu-latest

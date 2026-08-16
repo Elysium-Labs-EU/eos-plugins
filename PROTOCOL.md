@@ -93,3 +93,11 @@ A plugin added to this repo (see below) inherits this contract for free through 
 3. Add `eos-sink-<name>/README.md` covering your plugin's options.
 4. Add an entry to the root [README.md](README.md#available-plugins) pointing at it. This is the only shared file you need to touch; the shared `install.sh` already satisfies the [installer contract](#installer-contract) above for any plugin published in this repo.
 5. To publish a release: tag `eos-sink-<name>/vX.Y.Z` and push. The release workflow (`.github/workflows/release.yml`) builds, tests, and publishes it automatically — no per-plugin CI config needed, it parses the plugin name out of the tag.
+
+Releasing more than one plugin at a time goes through `scripts/release.sh`:
+
+```bash
+./scripts/release.sh eos-sink-loki/v0.1.0 eos-sink-sse/v0.2.0
+```
+
+GitHub Actions does not create tag events when more than three tags are pushed at once, and this repo ships four plugins — so tagging the whole set in one `git push` produces no workflow run, no error, and four tags on the remote that look released and aren't. The script pushes one tag per push and then waits for each tag's run to appear, so a tag that triggers nothing fails loudly with the `workflow_dispatch` command that publishes it instead.
