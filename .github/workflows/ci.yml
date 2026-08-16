@@ -36,10 +36,15 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: ${{ matrix.plugin }}/go.mod
+      # Read from the same file the Makefiles use, so a contributor's local
+      # `make lint` and this gate can never run different linter versions.
+      - name: Resolve golangci-lint version
+        id: golangci
+        run: echo "version=$(cat .golangci-version)" >> "$GITHUB_OUTPUT"
       - name: golangci-lint
         uses: golangci/golangci-lint-action@db9de0fc1a667e1a49d2291a1a042dff081d78f6 # v9
         with:
-          version: v2.11
+          version: ${{ steps.golangci.outputs.version }}
           working-directory: ${{ matrix.plugin }}
 
   test:
@@ -81,6 +86,13 @@ jobs:
         run: ./scripts/test-install.sh
       - name: Run release.sh unit tests
         run: ./scripts/test-release.sh
+
+  golangci-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the golangci-lint version has one source of truth
+        run: ./scripts/check-golangci-pin.sh
 
   any-convention:
     runs-on: ubuntu-latest

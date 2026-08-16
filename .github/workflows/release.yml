@@ -46,10 +46,15 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
+      # Read from the same file the Makefiles use, so a contributor's local
+      # `make lint` and this gate can never run different linter versions.
+      - name: Resolve golangci-lint version
+        id: golangci
+        run: echo "version=$(cat .golangci-version)" >> "$GITHUB_OUTPUT"
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.11
+          version: ${{ steps.golangci.outputs.version }}
           working-directory: ${{ needs.prepare.outputs.plugin }}
 
   test:
