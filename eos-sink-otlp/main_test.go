@@ -133,7 +133,7 @@ func TestBuildRecord(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to now on an unparseable timestamp", func(t *testing.T) {
+	t.Run("falls back to now on an unparsable timestamp", func(t *testing.T) {
 		// eos always sends RFC3339Nano, but a record must still ship with a
 		// usable timestamp rather than the zero time if that ever changes.
 		for _, ts := range []string{"", "not-a-timestamp", "2026-08-17 05:30:00"} {
@@ -191,7 +191,7 @@ func TestRunRejectsBadConfiguration(t *testing.T) {
 			wantErr: "missing service name",
 		},
 		{
-			name: "unparseable options",
+			name: "unparsable options",
 			env: map[string]string{
 				"EOS_SINK_ADDRESS": "127.0.0.1:4317",
 				"EOS_SINK_SERVICE": "demo",

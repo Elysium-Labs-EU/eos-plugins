@@ -124,7 +124,7 @@ func run(ctx context.Context, in io.Reader) error {
 // reached a release unnoticed.
 //
 // now supplies the fallback timestamp for a record whose ts is missing or
-// unparseable, injected so the fallback is observable in a test.
+// unparsable, injected so the fallback is observable in a test.
 func buildRecord(rec record, now func() time.Time) otellog.Record {
 	ts, err := time.Parse(time.RFC3339Nano, rec.TS)
 	if err != nil {
