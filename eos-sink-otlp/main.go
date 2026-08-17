@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -112,22 +113,34 @@ func run(ctx context.Context, in io.Reader) error {
 			return
 		}
 
-		ts, err := time.Parse(time.RFC3339Nano, rec.TS)
-		if err != nil {
-			ts = time.Now()
-		}
-
-		severity := severityFor(rec.Stream)
-
-		var lr otellog.Record
-		lr.SetTimestamp(ts)
-		lr.SetObservedTimestamp(ts)
-		lr.SetBody(otellog.StringValue(rec.Msg))
-		lr.SetSeverity(severity)
-		lr.AddAttributes(otellog.KeyValue{Key: "log.iostream", Value: otellog.StringValue(rec.Stream)})
-
-		logger.Emit(ctx, lr)
+		logger.Emit(ctx, buildRecord(rec, time.Now))
 	})
+}
+
+// buildRecord maps one eos log record onto an OTLP log record. It is separate
+// from run so the mapping can be asserted without a live exporter: the only
+// thing that caught the otel v0.21.0 API change was the compiler, and a change
+// that still compiled while silently dropping the stream attribute would have
+// reached a release unnoticed.
+//
+// now supplies the fallback timestamp for a record whose ts is missing or
+// unparsable, injected so the fallback is observable in a test.
+func buildRecord(rec record, now func() time.Time) otellog.Record {
+	ts, err := time.Parse(time.RFC3339Nano, rec.TS)
+	if err != nil {
+		ts = now()
+	}
+
+	var lr otellog.Record
+	lr.SetTimestamp(ts)
+	lr.SetObservedTimestamp(ts)
+	// otel/log v0.21.0 dropped its own Value and KeyValue types; the body and
+	// the attributes both come from otel/attribute now.
+	lr.SetBody(attribute.StringValue(rec.Msg))
+	lr.SetSeverity(severityFor(rec.Stream))
+	lr.AddAttributes(attribute.String("log.iostream", rec.Stream))
+
+	return lr
 }
 
 // readNDJSON calls handle once per newline-delimited line read from r, with
