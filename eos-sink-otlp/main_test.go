@@ -3,7 +3,9 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	otellog "go.opentelemetry.io/otel/log"
 )
 
@@ -84,4 +86,73 @@ func TestSeverityFor(t *testing.T) {
 			t.Errorf("severityFor(%q) = %v, want %v", c.stream, got, c.want)
 		}
 	}
+}
+
+// attrs collects a record's attributes into a map so a test can assert one key
+// without depending on iteration order.
+func attrs(t *testing.T, lr *otellog.Record) map[string]string {
+	t.Helper()
+	out := make(map[string]string, lr.AttributesLen())
+	lr.WalkAttributes(func(kv attribute.KeyValue) bool {
+		out[string(kv.Key)] = kv.Value.AsString()
+		return true
+	})
+	return out
+}
+
+func TestBuildRecord(t *testing.T) {
+	fallback := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	now := func() time.Time { return fallback }
+
+	t.Run("maps body severity and stream attribute", func(t *testing.T) {
+		ts := "2026-08-17T05:30:00.123456789Z"
+		lr := buildRecord(record{TS: ts, Stream: "stderr", Msg: "disk full"}, now)
+
+		if got := lr.Body().AsString(); got != "disk full" {
+			t.Errorf("body = %q, want %q", got, "disk full")
+		}
+		if got := lr.Severity(); got != otellog.SeverityError {
+			t.Errorf("severity = %v, want %v", got, otellog.SeverityError)
+		}
+		// The attribute is what tells a backend whether a line came from
+		// stdout or stderr; dropping it is a silent loss, not a build error.
+		if got := attrs(t, &lr)["log.iostream"]; got != "stderr" {
+			t.Errorf("log.iostream = %q, want %q", got, "stderr")
+		}
+
+		want, err := time.Parse(time.RFC3339Nano, ts)
+		if err != nil {
+			t.Fatalf("parsing the fixture timestamp: %v", err)
+		}
+		if !lr.Timestamp().Equal(want) {
+			t.Errorf("timestamp = %v, want %v", lr.Timestamp(), want)
+		}
+		if !lr.ObservedTimestamp().Equal(want) {
+			t.Errorf("observed timestamp = %v, want %v", lr.ObservedTimestamp(), want)
+		}
+	})
+
+	t.Run("falls back to now on an unparseable timestamp", func(t *testing.T) {
+		// eos always sends RFC3339Nano, but a record must still ship with a
+		// usable timestamp rather than the zero time if that ever changes.
+		for _, ts := range []string{"", "not-a-timestamp", "2026-08-17 05:30:00"} {
+			lr := buildRecord(record{TS: ts, Stream: "stdout", Msg: "x"}, now)
+			if !lr.Timestamp().Equal(fallback) {
+				t.Errorf("ts %q: timestamp = %v, want the fallback %v", ts, lr.Timestamp(), fallback)
+			}
+			if got := lr.Severity(); got != otellog.SeverityInfo {
+				t.Errorf("ts %q: severity = %v, want %v", ts, got, otellog.SeverityInfo)
+			}
+		}
+	})
+
+	t.Run("keeps an empty message and stream", func(t *testing.T) {
+		lr := buildRecord(record{TS: "2026-08-17T05:30:00Z"}, now)
+		if got := lr.Body().AsString(); got != "" {
+			t.Errorf("body = %q, want empty", got)
+		}
+		if _, ok := attrs(t, &lr)["log.iostream"]; !ok {
+			t.Error("log.iostream missing; the attribute should be present even when the stream is empty")
+		}
+	})
 }
