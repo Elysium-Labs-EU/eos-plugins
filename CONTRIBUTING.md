@@ -37,6 +37,8 @@ Use `make lint` rather than calling `golangci-lint` directly. The Makefile point
 
 `make lint` also runs a specific linter version rather than whatever is on your `PATH`. The version lives in `.golangci-version` at the repo root, read by the Makefiles and by both CI workflows, so the gate and your local run can never disagree. Bumping it is a one-line change to that file; `scripts/check-golangci-pin.sh` fails if a version is hardcoded anywhere else or a Makefile falls back to the `PATH` binary. Dependabot does not bump this value, only `uses:` refs, so it stays exact on purpose.
 
+Adding a step to a workflow means pinning the action to a full commit SHA with the version as a trailing comment (`actions/checkout@3d3c42e5... # v7`). A tag is mutable, so a floating `@v7` lets a workflow nobody touched run different code between two pushes. The comment is what Dependabot reads to bump the pin, so it is not optional either. `scripts/check-action-pins.sh` fails the build on both mistakes.
+
 Changing `install.sh` also means running its own checks from the repo root:
 
 ```bash

@@ -42,8 +42,8 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
       # Read from the same file the Makefiles use, so a contributor's local
@@ -52,7 +52,7 @@ jobs:
         id: golangci
         run: echo "version=$(cat .golangci-version)" >> "$GITHUB_OUTPUT"
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+        uses: golangci/golangci-lint-action@db9de0fc1a667e1a49d2291a1a042dff081d78f6 # v9
         with:
           version: ${{ steps.golangci.outputs.version }}
           working-directory: ${{ needs.prepare.outputs.plugin }}
@@ -61,8 +61,8 @@ jobs:
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
       - name: Run tests
@@ -80,8 +80,8 @@ jobs:
             goarch: arm64
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: ${{ needs.prepare.outputs.plugin }}/go.mod
       - name: Build binary
@@ -97,7 +97,7 @@ jobs:
           ls -lh "${ARTIFACT}"
           file "${ARTIFACT}"
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}
           path: ${{ needs.prepare.outputs.plugin }}-linux-${{ matrix.goarch }}
@@ -111,9 +111,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Download artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: artifacts
       - name: Prepare release files
@@ -174,7 +174,7 @@ jobs:
           See the [README](https://github.com/${REPO}/blob/main/${PLUGIN}/README.md) for configuration.
           EOF
       - name: Create release and upload assets
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@c12583777ecdfd3be55c69cf75464299dc01057e # v3
         with:
           tag_name: ${{ needs.prepare.outputs.plugin }}/${{ needs.prepare.outputs.version }}
           name: ${{ needs.prepare.outputs.plugin }} ${{ needs.prepare.outputs.version }}

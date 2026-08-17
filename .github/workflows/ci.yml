@@ -17,7 +17,7 @@ jobs:
   typos:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check for typos
         uses: crate-ci/typos@bee27e3a4fd1ea2111cf90ab89cd076c870fce14 # v1.48.0
 
@@ -72,14 +72,14 @@ jobs:
   protocol-drift:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check plugin contract against PROTOCOL.md
         run: ./scripts/check-protocol-drift.sh
 
   install-script:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Shellcheck install.sh and scripts
         run: shellcheck install.sh scripts/*.sh
       - name: Run install.sh unit tests
@@ -90,21 +90,28 @@ jobs:
   golangci-pin:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check the golangci-lint version has one source of truth
         run: ./scripts/check-golangci-pin.sh
+
+  action-pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check every action is pinned to a commit SHA
+        run: ./scripts/check-action-pins.sh
 
   any-convention:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Check any-vs-interface{} convention
         run: ./scripts/check-any-convention.sh
 
   large-files:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # diffs changed files against origin/main
       - name: Check for large or binary blobs
