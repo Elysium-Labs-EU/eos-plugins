@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -155,4 +156,98 @@ func TestBuildRecord(t *testing.T) {
 			t.Error("log.iostream missing; the attribute should be present even when the stream is empty")
 		}
 	})
+}
+
+// clearSinkEnv gives each run test a known environment. eos sets these
+// variables when it launches a sink (PROTOCOL.md); a stray value inherited
+// from the developer's shell would make a test pass or fail for the wrong
+// reason.
+func clearSinkEnv(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"EOS_SINK_ADDRESS", "EOS_SINK_SERVICE", "EOS_SINK_OPTIONS"} {
+		t.Setenv(k, "")
+		if err := os.Unsetenv(k); err != nil {
+			t.Fatalf("unsetting %s: %v", k, err)
+		}
+	}
+}
+
+func TestRunRejectsBadConfiguration(t *testing.T) {
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr string
+	}{
+		{
+			name:    "no address",
+			env:     map[string]string{"EOS_SINK_SERVICE": "demo"},
+			wantErr: "missing required EOS_SINK_ADDRESS",
+		},
+		{
+			// eos resolves the service name; without one the exporter would
+			// publish logs no backend can attribute to anything.
+			name:    "no service name from either source",
+			env:     map[string]string{"EOS_SINK_ADDRESS": "127.0.0.1:4317"},
+			wantErr: "missing service name",
+		},
+		{
+			name: "unparseable options",
+			env: map[string]string{
+				"EOS_SINK_ADDRESS": "127.0.0.1:4317",
+				"EOS_SINK_SERVICE": "demo",
+				"EOS_SINK_OPTIONS": "{not json",
+			},
+			wantErr: "parsing EOS_SINK_OPTIONS",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			clearSinkEnv(t)
+			for k, v := range c.env {
+				t.Setenv(k, v)
+			}
+
+			err := run(t.Context(), strings.NewReader(""))
+			if err == nil {
+				t.Fatalf("run = nil error, want %q", c.wantErr)
+			}
+			if !strings.Contains(err.Error(), c.wantErr) {
+				t.Errorf("run error = %q, want it to contain %q", err, c.wantErr)
+			}
+		})
+	}
+}
+
+func TestRunTakesServiceNameFromOptions(t *testing.T) {
+	// options.service_name overrides EOS_SINK_SERVICE, so a bare address with
+	// only the option set must be accepted rather than rejected as nameless.
+	clearSinkEnv(t)
+	t.Setenv("EOS_SINK_ADDRESS", "127.0.0.1:4317")
+	t.Setenv("EOS_SINK_OPTIONS", `{"service_name":"from-options","insecure":true,"headers":{"x-tenant":"acme"}}`)
+
+	if err := run(t.Context(), strings.NewReader("")); err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
+}
+
+func TestRunConsumesRecordsAndExitsCleanly(t *testing.T) {
+	// End of stdin is a normal shutdown, not an error: eos closes stdin and
+	// kills the plugin 3s later (PROTOCOL.md), so run must drain, flush inside
+	// that window and return nil -- with no collector listening, which is also
+	// what a misconfigured host looks like.
+	clearSinkEnv(t)
+	t.Setenv("EOS_SINK_ADDRESS", "http://127.0.0.1:4317")
+	t.Setenv("EOS_SINK_SERVICE", "demo")
+
+	input := strings.Join([]string{
+		`{"ts":"2026-08-17T05:30:00Z","service":"demo","stream":"stderr","msg":"disk full"}`,
+		`{"ts":"nonsense","service":"demo","stream":"stdout","msg":"fallback timestamp"}`,
+		`{not json at all`,
+		"",
+	}, "\n")
+
+	if err := run(t.Context(), strings.NewReader(input)); err != nil {
+		t.Fatalf("run = %v, want nil", err)
+	}
 }
